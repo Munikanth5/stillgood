@@ -70,7 +70,7 @@ export const ImpactDashboard: React.FC<ImpactDashboardProps> = ({
             <span className="text-xs font-bold uppercase tracking-wider text-ink-muted">
               Tier 1: Modeled Scenario
             </span>
-            <span className="text-[10px] bg-blue-50 text-blue-800 border border-blue-200 px-2 py-0.5 rounded font-mono font-semibold">
+            <span className="text-[10px] bg-forest-50 text-forest-800 border border-forest-600/30 px-2 py-0.5 rounded font-mono font-semibold">
               PRE-SERVICE
             </span>
           </div>
@@ -91,7 +91,7 @@ export const ImpactDashboard: React.FC<ImpactDashboardProps> = ({
                 ${metrics.modeled_purchase_savings_usd.toFixed(2)}
               </div>
               <span className="text-[11px] text-ink-muted">
-                Avoided unneeded ingredients based on 350 attendance
+                Avoided unneeded ingredients based on target attendance
               </span>
             </div>
           </div>
@@ -124,7 +124,9 @@ export const ImpactDashboard: React.FC<ImpactDashboardProps> = ({
                 {metrics.modeled_at_risk_rescued_kg.toFixed(1)} kg
               </div>
               <span className="text-[11px] text-ink-muted">
-                Fresh spinach committed to Palak Dal prior to expiry
+                {metrics.kitchen_id === 'kitchen_restaurant_verde'
+                  ? 'Fresh strawberries committed to dessert special prior to expiry'
+                  : 'Fresh spinach committed to Palak Dal prior to expiry'}
               </span>
             </div>
           </div>

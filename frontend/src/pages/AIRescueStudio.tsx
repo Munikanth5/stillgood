@@ -125,8 +125,12 @@ export const AIRescueStudio: React.FC<AIRescueStudioProps> = ({
                 </span>
                 <div className="space-y-1 text-ink">
                   <div className="flex justify-between">
-                    <span>At-Risk Spinach Rescued:</span>
-                    <span className="font-bold text-forest-700 font-mono">14.0 kg (Lot LOT-SPN-2026-1014)</span>
+                    <span>Rescued At-Risk Inventory:</span>
+                    <span className="font-bold text-forest-700 font-mono">
+                      {planC.at_risk_inventory_utilized_kg > 0
+                        ? `${planC.at_risk_inventory_utilized_kg} kg (${kitchen.id === 'kitchen_restaurant_verde' ? 'Strawberries' : 'Spinach'})`
+                        : '0 kg'}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span>Avoided Spoilage Value:</span>
