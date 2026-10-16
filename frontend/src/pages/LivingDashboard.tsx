@@ -133,33 +133,54 @@ export const LivingDashboard: React.FC<LivingDashboardProps> = ({
         </div>
       </div>
 
-      {/* Special Widget for Restaurants: Table Bookings vs Walk-ins Split */}
+      {/* Special Widget for Restaurants: The Kitchen & Restaurant Palette Station Breakdown */}
       {isRestaurant && (
-        <div className="p-5 rounded-2xl bg-ivory border-2 border-forest-600/30 shadow-sm grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="flex items-center gap-3 p-3 bg-forest-50/70 rounded-xl border border-forest-600/20">
-            <CalendarCheck className="w-7 h-7 text-forest-700 shrink-0" />
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-forest-800 block">Confirmed Bookings</span>
-              <span className="font-serif text-2xl font-bold text-forest-900 tabular-nums">70 Guests</span>
-              <span className="text-[10px] text-forest-700 block mt-0.5">Known reservations on book</span>
-            </div>
+        <div className="p-5 rounded-2xl bg-ivory border-2 border-[#153D34]/30 shadow-sm space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-forest-900 flex items-center gap-1.5">
+              <Utensils className="w-3.5 h-3.5 text-terracotta" />
+              The Kitchen & Restaurant Palette: Station-Coded Diners
+            </span>
+            <span className="text-[10px] bg-forest-50 text-forest-800 border border-forest-600/30 px-2 py-0.5 rounded font-medium">
+              Bistro Station Workflow
+            </span>
           </div>
 
-          <div className="flex items-center gap-3 p-3 bg-forest-50/70 rounded-xl border border-forest-600/20">
-            <Footprints className="w-7 h-7 text-forest-700 shrink-0" />
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-forest-800 block">Predicted Walk-ins</span>
-              <span className="font-serif text-2xl font-bold text-forest-900 tabular-nums">+35 Guests</span>
-              <span className="text-[10px] text-forest-700 block mt-0.5">Based on Tuesday history</span>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* Station 1: Front of House Dining Room Linen & Brass */}
+            <div className="flex items-center gap-3 p-3.5 bg-[#FAF8F1] rounded-xl border-2 border-[#D4A373]/50 shadow-xs">
+              <CalendarCheck className="w-8 h-8 text-[#9E642A] shrink-0" />
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#9E642A] block">
+                  🍷 Dining Room (Reservations)
+                </span>
+                <span className="font-serif text-2xl font-bold text-[#3B2816] tabular-nums">70 Guests</span>
+                <span className="text-[10px] text-[#7A5023] block mt-0.5 font-medium">OpenTable confirmed on book</span>
+              </div>
             </div>
-          </div>
 
-          <div className="flex items-center gap-3 p-3 bg-forest-800 text-ivory rounded-xl">
-            <Utensils className="w-7 h-7 text-forest-500 shrink-0" />
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-forest-100/70 block">Target Covers to Plan</span>
-              <span className="font-serif text-2xl font-bold text-ivory tabular-nums">105 Total</span>
-              <span className="text-[10px] text-forest-100/80 block mt-0.5">Two-stage prep strategy active</span>
+            {/* Station 2: Chilled Walk-in Cooler Reserve */}
+            <div className="flex items-center gap-3 p-3.5 bg-[#EDF5F1] rounded-xl border-2 border-[#23785D]/50 shadow-xs">
+              <Footprints className="w-8 h-8 text-[#23785D] shrink-0" />
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#1B5E4B] block">
+                  ❄️ Cold Pantry (Walk-in Buffer)
+                </span>
+                <span className="font-serif text-2xl font-bold text-[#0E382C] tabular-nums">+35 Guests</span>
+                <span className="text-[10px] text-[#1B5E4B] block mt-0.5 font-medium">Chilled raw mise-en-place</span>
+              </div>
+            </div>
+
+            {/* Station 3: Sauté & Hot Line Station */}
+            <div className="flex items-center gap-3 p-3.5 bg-[#13332A] text-ivory rounded-xl border-2 border-[#C57B55]/60 shadow-sm">
+              <Utensils className="w-8 h-8 text-[#E08A5E] shrink-0" />
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#F1D1C2] block">
+                  🔥 Sauté & Hot Line Target
+                </span>
+                <span className="font-serif text-2xl font-bold text-ivory tabular-nums">105 Total</span>
+                <span className="text-[10px] text-forest-100/80 block mt-0.5 font-medium">Two-stage cook schedule active</span>
+              </div>
             </div>
           </div>
         </div>

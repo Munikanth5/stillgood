@@ -59,6 +59,25 @@ export const Header: React.FC<HeaderProps> = ({
                 <ChevronDown className="w-3.5 h-3.5 text-forest-100/60" />
               </button>
 
+              {/* Dynamic Palette Indicator */}
+              {currentKitchen?.type === 'restaurant_cafe' ? (
+                <div
+                  className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-forest-800/80 border border-terracotta/50 text-xs text-ivory shadow-xs"
+                  title="The Kitchen & Restaurant Palette: Sauté Hot Line + Cold Walk-in Reserve + Bistro Linen"
+                >
+                  <span className="w-2 h-2 rounded-full bg-terracotta" />
+                  <span className="text-[11px] font-semibold text-ivory">The Kitchen & Restaurant Palette</span>
+                </div>
+              ) : (
+                <div
+                  className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-forest-800/60 border border-forest-700/60 text-xs text-forest-100/90"
+                  title="Campus / Cafeteria Institutional Dining System"
+                >
+                  <span className="w-2 h-2 rounded-full bg-forest-500" />
+                  <span className="text-[11px] text-forest-100/80">Campus Dining Palette</span>
+                </div>
+              )}
+
               {/* Dropdown for all 8 Kitchen Archetypes */}
               <div className="absolute left-0 mt-1 w-80 bg-forest-900 border border-forest-700 rounded-xl shadow-2xl py-2 hidden group-hover:block z-50">
                 <div className="px-3 py-1.5 text-[11px] font-semibold tracking-wider text-forest-100/50 uppercase border-b border-forest-800">

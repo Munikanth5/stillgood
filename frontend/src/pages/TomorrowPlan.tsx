@@ -125,7 +125,7 @@ export const TomorrowPlan: React.FC<TomorrowPlanProps> = ({
 
       {/* Two-Stage Prep Strategy Card (Crucial for Restaurants with Reservations + Walk-ins) */}
       {plan.two_stage_prep && (
-        <div className="bg-gradient-to-br from-forest-50 to-ivory rounded-2xl border-2 border-forest-600/40 p-6 shadow-sm space-y-4">
+        <div className="bg-gradient-to-br from-forest-50 to-ivory rounded-2xl border-2 border-[#153D34]/30 p-6 shadow-sm space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-xl bg-forest-800 text-ivory flex items-center justify-center font-bold">
@@ -133,10 +133,10 @@ export const TomorrowPlan: React.FC<TomorrowPlanProps> = ({
               </div>
               <div>
                 <h3 className="font-serif text-lg font-bold text-forest-900">
-                  Two-Stage Kitchen Prep Strategy
+                  The Kitchen & Restaurant Palette: Two-Stage Kitchen Prep Strategy
                 </h3>
                 <span className="text-xs text-forest-700">
-                  Protects availability for walk-ins without wasting a single gram of cooked food.
+                  Station-coded prep protecting walk-in availability without wasting a single gram of cooked food.
                 </span>
               </div>
             </div>
@@ -146,40 +146,50 @@ export const TomorrowPlan: React.FC<TomorrowPlanProps> = ({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Stage 1: Hot Line */}
-            <div className="p-4 rounded-xl bg-white border border-forest-600/30 shadow-xs space-y-2">
-              <div className="flex items-center gap-2 text-forest-800">
-                <Flame className="w-5 h-5 text-terracotta shrink-0" />
-                <span className="font-bold text-sm text-ink">
-                  Stage 1: Pre-Service Hot Line (Prepped by 4:30 PM)
+            {/* Stage 1: Sauté & Hot Line Station (Warm Copper / Terracotta Palette) */}
+            <div className="p-4 rounded-xl bg-[#FAF3EE] border-2 border-[#C57B55]/70 shadow-xs space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-[#7A3614]">
+                  <Flame className="w-5 h-5 text-terracotta shrink-0 animate-pulse" />
+                  <span className="font-bold text-sm text-[#381607]">
+                    Stage 1: Pre-Service Hot Line (Prepped by 4:30 PM)
+                  </span>
+                </div>
+                <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-terracotta text-ivory">
+                  🔥 Sauté Station
                 </span>
               </div>
-              <p className="text-xs text-ink-muted leading-relaxed">
+              <p className="text-xs text-[#592B15] leading-relaxed">
                 {plan.two_stage_prep.stage_1_label}
               </p>
-              <div className="pt-2 border-t border-ink-border/40 flex items-center justify-between text-xs">
-                <span className="text-ink-muted">Prepped for Confirmed Diners:</span>
-                <span className="font-mono font-bold text-forest-900 tabular-nums">
-                  {plan.two_stage_prep.stage_1_portions} portions
+              <div className="pt-2 border-t border-[#C57B55]/30 flex items-center justify-between text-xs">
+                <span className="text-[#7A3614] font-medium">Prepped for Confirmed Diners:</span>
+                <span className="font-serif font-bold text-[#7A3614] text-base tabular-nums">
+                  {plan.two_stage_prep.stage_1_portions} portions hot
                 </span>
               </div>
             </div>
 
-            {/* Stage 2: Cold Reserve */}
-            <div className="p-4 rounded-xl bg-white border border-forest-600/30 shadow-xs space-y-2">
-              <div className="flex items-center gap-2 text-forest-800">
-                <Snowflake className="w-5 h-5 text-forest-600 shrink-0" />
-                <span className="font-bold text-sm text-ink">
-                  Stage 2: Quick-Fire Cold Reserve (Mise-en-Place in Cooler)
+            {/* Stage 2: Cold Reserve (Chilled Walk-in Cooler Sage / Herb Palette) */}
+            <div className="p-4 rounded-xl bg-[#EDF5F1] border-2 border-[#23785D]/70 shadow-xs space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-[#134938]">
+                  <Snowflake className="w-5 h-5 text-forest-600 shrink-0" />
+                  <span className="font-bold text-sm text-[#0C2E24]">
+                    Stage 2: Quick-Fire Cold Reserve (Mise-en-Place in Cooler)
+                  </span>
+                </div>
+                <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-forest-800 text-ivory">
+                  ❄️ Garde Manger
                 </span>
               </div>
-              <p className="text-xs text-ink-muted leading-relaxed">
+              <p className="text-xs text-[#1B5E4B] leading-relaxed">
                 {plan.two_stage_prep.stage_2_label}
               </p>
-              <div className="pt-2 border-t border-ink-border/40 flex items-center justify-between text-xs">
-                <span className="text-ink-muted">Kept Raw & Cold for Walk-ins:</span>
-                <span className="font-mono font-bold text-forest-900 tabular-nums">
-                  {plan.two_stage_prep.stage_2_portions} portions buffer
+              <div className="pt-2 border-t border-[#23785D]/30 flex items-center justify-between text-xs">
+                <span className="text-[#134938] font-medium">Kept Raw & Cold for Walk-ins:</span>
+                <span className="font-serif font-bold text-[#134938] text-base tabular-nums">
+                  {plan.two_stage_prep.stage_2_portions} portions chilled
                 </span>
               </div>
             </div>

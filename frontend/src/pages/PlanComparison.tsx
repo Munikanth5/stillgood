@@ -219,15 +219,25 @@ export const PlanComparison: React.FC<PlanComparisonProps> = ({
                 </div>
               </div>
 
-              {/* Two-Stage Prep Pill if Present */}
+              {/* Two-Stage Prep Pill if Present with Kitchen & Restaurant Palette Accents */}
               {data.two_stage_prep && (
-                <div className="p-3 bg-forest-100/60 rounded-xl border border-forest-600/30 text-xs space-y-1">
-                  <div className="font-bold text-forest-900 flex items-center gap-1.5">
-                    <Utensils className="w-3.5 h-3.5 text-forest-700" />
-                    <span>Two-Stage Kitchen Prep</span>
+                <div className="p-3 bg-[#FAF8F2] rounded-xl border-2 border-[#153D34]/30 text-xs space-y-1.5 shadow-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-forest-900 flex items-center gap-1.5 text-[11px]">
+                      <Utensils className="w-3.5 h-3.5 text-terracotta" />
+                      <span>Two-Stage Prep Stations</span>
+                    </span>
+                    <span className="text-[9px] uppercase font-bold text-forest-800 bg-forest-50 px-1.5 py-0.2 rounded border border-forest-600/30">
+                      Restaurant Palette
+                    </span>
                   </div>
-                  <div className="text-[11px] text-forest-800">
-                    🔥 Hot Line: {data.two_stage_prep.stage_1_portions} portions • ❄️ Cold Reserve: {data.two_stage_prep.stage_2_portions} portions
+                  <div className="grid grid-cols-2 gap-1.5 text-[10px]">
+                    <div className="p-1.5 bg-[#FAF3EE] rounded border border-[#C57B55]/50 text-[#7A3614] font-medium">
+                      🔥 Sauté: {data.two_stage_prep.stage_1_portions} portions
+                    </div>
+                    <div className="p-1.5 bg-[#EDF5F1] rounded border border-[#23785D]/50 text-[#134938] font-medium">
+                      ❄️ Pantry: {data.two_stage_prep.stage_2_portions} portions
+                    </div>
                   </div>
                 </div>
               )}
