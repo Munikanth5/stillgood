@@ -10,7 +10,14 @@ import {
   FileText,
   Clock,
   Sparkles,
-  ArrowRight
+  ArrowRight,
+  ShieldCheck,
+  CheckCircle2,
+  Utensils,
+  Snowflake,
+  Flame,
+  CalendarCheck,
+  Footprints
 } from 'lucide-react';
 
 interface TomorrowPlanProps {
@@ -35,22 +42,65 @@ export const TomorrowPlan: React.FC<TomorrowPlanProps> = ({
     );
   }
 
+  const isRestaurant = kitchen.id === 'kitchen_restaurant_verde' || kitchen.type === 'restaurant_cafe';
+
   return (
     <div className="space-y-6">
+      {/* 4-Step Progress Banner */}
+      <div className="bg-ivory-cream rounded-2xl p-4 border border-ink-border/70 shadow-sm">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-forest-800 flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-forest-600" />
+            Decision Twin Flow
+          </span>
+          <span className="text-[10px] text-ink-muted">Official Production Prep Sheet</span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 text-xs">
+          <div className="p-2.5 rounded-xl bg-white border border-ink-border text-ink-muted flex items-center gap-2">
+            <span className="w-5 h-5 rounded-full bg-forest-800/20 text-forest-900 flex items-center justify-center font-bold text-[10px] shrink-0">1</span>
+            <div>
+              <span className="font-semibold block">Check Today</span>
+              <span className="text-[10px]">Living kitchen review</span>
+            </div>
+          </div>
+          <div className="p-2.5 rounded-xl bg-white border border-ink-border text-ink-muted flex items-center gap-2">
+            <span className="w-5 h-5 rounded-full bg-forest-800/20 text-forest-900 flex items-center justify-center font-bold text-[10px] shrink-0">2</span>
+            <div>
+              <span className="font-semibold block">Tell Us What Changed</span>
+              <span className="text-[10px]">Logged disruption facts</span>
+            </div>
+          </div>
+          <div className="p-2.5 rounded-xl bg-white border border-ink-border text-ink-muted flex items-center gap-2">
+            <span className="w-5 h-5 rounded-full bg-forest-800/20 text-forest-900 flex items-center justify-center font-bold text-[10px] shrink-0">3</span>
+            <div>
+              <span className="font-semibold block">Pick Better Plan</span>
+              <span className="text-[10px]">Compare 3 choices</span>
+            </div>
+          </div>
+          <div className="p-2.5 rounded-xl bg-forest-50 border-2 border-forest-600 text-forest-900 flex items-center gap-2 shadow-sm">
+            <span className="w-5 h-5 rounded-full bg-forest-800 text-ivory flex items-center justify-center font-bold text-[10px] shrink-0">4</span>
+            <div>
+              <span className="font-bold block">Production Schedule</span>
+              <span className="text-[10px] text-forest-700">Kitchen prep batch sheet</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Header */}
       <div className="bg-ivory rounded-2xl p-6 border border-ink-border/60 shadow-sm space-y-2">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold uppercase tracking-wider text-forest-800">
-                Shift Schedule
+                Shift Schedule & Prep Orders
               </span>
               <StatusBadge status={plan.feasibility_status} size="sm" />
             </div>
             <h2 className="font-serif text-2xl font-bold text-ink mt-0.5">
               Tomorrow&apos;s Service Plan: {plan.title}
             </h2>
-            <p className="text-xs sm:text-sm text-ink-muted">
+            <p className="text-xs sm:text-sm text-ink-muted leading-relaxed max-w-3xl">
               {plan.summary_explanation}
             </p>
           </div>
@@ -73,16 +123,95 @@ export const TomorrowPlan: React.FC<TomorrowPlanProps> = ({
         </div>
       </div>
 
+      {/* Two-Stage Prep Strategy Card (Crucial for Restaurants with Reservations + Walk-ins) */}
+      {plan.two_stage_prep && (
+        <div className="bg-gradient-to-br from-forest-50 to-ivory rounded-2xl border-2 border-forest-600/40 p-6 shadow-sm space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-forest-800 text-ivory flex items-center justify-center font-bold">
+                <Utensils className="w-4 h-4 text-forest-500" />
+              </div>
+              <div>
+                <h3 className="font-serif text-lg font-bold text-forest-900">
+                  Two-Stage Kitchen Prep Strategy
+                </h3>
+                <span className="text-xs text-forest-700">
+                  Protects availability for walk-ins without wasting a single gram of cooked food.
+                </span>
+              </div>
+            </div>
+            <span className="text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-forest-800 text-ivory self-start sm:self-auto">
+              Zero Food Waste Guarantee
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Stage 1: Hot Line */}
+            <div className="p-4 rounded-xl bg-white border border-forest-600/30 shadow-xs space-y-2">
+              <div className="flex items-center gap-2 text-forest-800">
+                <Flame className="w-5 h-5 text-terracotta shrink-0" />
+                <span className="font-bold text-sm text-ink">
+                  Stage 1: Pre-Service Hot Line (Prepped by 4:30 PM)
+                </span>
+              </div>
+              <p className="text-xs text-ink-muted leading-relaxed">
+                {plan.two_stage_prep.stage_1_label}
+              </p>
+              <div className="pt-2 border-t border-ink-border/40 flex items-center justify-between text-xs">
+                <span className="text-ink-muted">Prepped for Confirmed Diners:</span>
+                <span className="font-mono font-bold text-forest-900 tabular-nums">
+                  {plan.two_stage_prep.stage_1_portions} portions
+                </span>
+              </div>
+            </div>
+
+            {/* Stage 2: Cold Reserve */}
+            <div className="p-4 rounded-xl bg-white border border-forest-600/30 shadow-xs space-y-2">
+              <div className="flex items-center gap-2 text-forest-800">
+                <Snowflake className="w-5 h-5 text-forest-600 shrink-0" />
+                <span className="font-bold text-sm text-ink">
+                  Stage 2: Quick-Fire Cold Reserve (Mise-en-Place in Cooler)
+                </span>
+              </div>
+              <p className="text-xs text-ink-muted leading-relaxed">
+                {plan.two_stage_prep.stage_2_label}
+              </p>
+              <div className="pt-2 border-t border-ink-border/40 flex items-center justify-between text-xs">
+                <span className="text-ink-muted">Kept Raw & Cold for Walk-ins:</span>
+                <span className="font-mono font-bold text-forest-900 tabular-nums">
+                  {plan.two_stage_prep.stage_2_portions} portions buffer
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-3 bg-forest-100/50 rounded-xl text-xs text-forest-900 flex items-start gap-2">
+            <CheckCircle2 className="w-4 h-4 text-forest-700 shrink-0 mt-0.5" />
+            <div className="space-y-0.5">
+              <span className="font-bold">Why this eliminates food waste:</span>
+              <p className="text-[11px] text-forest-800">
+                {plan.two_stage_prep.details.join(' ')}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main Prep Schedule Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left 2 Cols: Dishes and Ingredient Breakdown */}
         <div className="lg:col-span-2 space-y-6">
           {/* Planned Dishes */}
           <div className="bg-ivory rounded-2xl border border-ink-border/60 p-6 shadow-sm space-y-4">
-            <h3 className="font-serif text-lg font-bold text-ink flex items-center gap-2">
-              <CookingPot className="w-4 h-4 text-forest-700" />
-              <span>Planned Dishes & Prep Batching</span>
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="font-serif text-lg font-bold text-ink flex items-center gap-2">
+                <CookingPot className="w-4 h-4 text-forest-700" />
+                <span>Planned Dishes & Prep Batching</span>
+              </h3>
+              <span className="text-xs text-forest-700 font-medium">
+                {isRestaurant ? 'Fixed Printed Menu Recipes' : 'Standard Kitchen Recipes'}
+              </span>
+            </div>
 
             <div className="divide-y divide-ink-border/40">
               {plan.planned_items.map((item) => (
@@ -120,7 +249,7 @@ export const TomorrowPlan: React.FC<TomorrowPlanProps> = ({
           <div className="bg-ivory rounded-2xl border border-ink-border/60 p-6 shadow-sm space-y-4">
             <h3 className="font-serif text-lg font-bold text-ink flex items-center gap-2">
               <Boxes className="w-4 h-4 text-forest-700" />
-              <span>Ingredient Requirements & FEFO Allocation</span>
+              <span>Ingredient Stock Allocation (First-Expiring First-Used)</span>
             </h3>
 
             <div className="overflow-x-auto">
@@ -149,8 +278,8 @@ export const TomorrowPlan: React.FC<TomorrowPlanProps> = ({
                             <span className="text-[11px] font-mono text-forest-800 flex items-center gap-1">
                               <span>Lot {alloc.batch_code}</span>
                               {alloc.was_at_risk && (
-                                <span className="text-[9px] bg-amber-100 text-amber-900 px-1 rounded font-bold uppercase">
-                                  Rescued
+                                <span className="text-[9px] bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded font-bold uppercase">
+                                  Rescued Stock
                                 </span>
                               )}
                             </span>
@@ -164,7 +293,7 @@ export const TomorrowPlan: React.FC<TomorrowPlanProps> = ({
                               +{shortage.shortage_qty} {shortage.unit}
                             </span>
                           ) : (
-                            <span className="text-forest-700 font-semibold">In Stock</span>
+                            <span className="text-forest-700 font-semibold">Fully In Stock</span>
                           )}
                         </td>
                       </tr>
@@ -187,7 +316,7 @@ export const TomorrowPlan: React.FC<TomorrowPlanProps> = ({
 
             {plan.purchases_required.length === 0 ? (
               <div className="p-4 rounded-xl bg-forest-50 text-forest-800 text-xs border border-forest-600/30">
-                Zero new purchases required. Current inventory covers 100% of ingredient demands.
+                Zero new purchases required. Current inventory covers 100% of ingredient demands without extra cash outlay.
               </div>
             ) : (
               <div className="space-y-3">
@@ -220,7 +349,7 @@ export const TomorrowPlan: React.FC<TomorrowPlanProps> = ({
           {/* Operational Boundaries */}
           <div className="bg-ivory-cream rounded-2xl border border-ink-border/60 p-6 shadow-sm space-y-3 text-xs">
             <h4 className="font-serif text-base font-bold text-ink">
-              Operational Gate Limits
+              Kitchen Operational Limits
             </h4>
             <div className="space-y-2 text-ink-muted">
               <div className="flex justify-between">
@@ -228,14 +357,20 @@ export const TomorrowPlan: React.FC<TomorrowPlanProps> = ({
                 <span className="font-mono font-medium text-ink">{kitchen.capacity_meals_per_service} portions</span>
               </div>
               <div className="flex justify-between">
-                <span>Supplier Cutoff Status:</span>
-                <span className="font-mono font-medium text-forest-800">Satisfied (0 Delayed)</span>
+                <span>Delayed Suppliers:</span>
+                <span className="font-mono font-medium text-forest-800">
+                  {plan.feasibility_status === 'FEASIBLE' ? 'Handled (0 Blockers)' : 'Review Required'}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span>Dietary Policy:</span>
                 <span className="font-mono font-medium text-forest-800">
                   {kitchen.dietary_strictness === 'clinical_strict' ? 'Clinical Strict' : 'Multi-Dietary Standard'}
                 </span>
+              </div>
+              <div className="flex justify-between">
+                <span>Food Safety Gate:</span>
+                <span className="font-mono font-medium text-forest-800">Active (Quarantined Items Blocked)</span>
               </div>
             </div>
           </div>

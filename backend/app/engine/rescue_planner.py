@@ -122,7 +122,142 @@ class RescuePlanner:
     ) -> Dict[str, Any]:
         """
         Generates Plan A, Plan B, Plan C, and rejected candidates for the scenario.
+        Dynamically adapts for Corporate Cafeteria or Restaurant & Café with Fixed Menu.
         """
+        if self.kitchen.id == "kitchen_restaurant_verde":
+            # --- RESTAURANT & CAFÉ FIXED-MENU SCENARIO ---
+            target = scenario.revised_expected_meals or 70
+            half = max(10, target // 2)
+            other_half = target - half
+
+            # Stage breakdown for reservations vs walk-ins
+            confirmed = min(70, target)
+            walkins = max(0, target - confirmed)
+            two_stage = {
+                "stage_1_portions": confirmed,
+                "stage_2_portions": walkins,
+                "stage_1_label": f"Stage 1: Pre-Service Hot Line (Prepped for {confirmed} confirmed bookings by 4:30 PM)",
+                "stage_2_label": f"Stage 2: Quick-Fire Cold Reserve (Mise-en-place in cooler for {walkins} walk-ins)",
+                "details": [
+                    f"Hot line: {confirmed} portions simmered before doors open.",
+                    f"Cold station: {walkins} portions pre-portioned raw in cooler.",
+                    "Zero food thrown away if walk-ins arrive late or don't show."
+                ]
+            }
+            reservation_split = {
+                "confirmed_reservations": confirmed,
+                "predicted_walkins": walkins,
+                "total_target": target
+            }
+
+            # Plan A: Cook for 120 anyway (Severe food waste)
+            plan_a_verde_items = [
+                PlanItem(recipe_id="recipe_verde_alfredo", recipe_name="Creamy Garlic Fettuccine Alfredo", portions=60, dietary_tags=[DietaryTag.VEGETARIAN], cost_per_portion=2.20, total_cost=132.0),
+                PlanItem(recipe_id="recipe_verde_pomodoro", recipe_name="Rustic Tomato Pomodoro Penne", portions=60, dietary_tags=[DietaryTag.VEGETARIAN, DietaryTag.VEGAN], cost_per_portion=1.35, total_cost=81.0),
+                PlanItem(recipe_id="recipe_verde_soup", recipe_name="Tuscan Tomato Basil Soup", portions=30, dietary_tags=[DietaryTag.VEGAN], cost_per_portion=0.85, total_cost=25.5),
+                PlanItem(recipe_id="recipe_verde_salad", recipe_name="Strawberry & Baby Spinach Salad", portions=20, dietary_tags=[DietaryTag.VEGAN], cost_per_portion=0.88, total_cost=17.6),
+            ]
+            plan_a = self.evaluate_plan_items(
+                plan_id="plan_a_original",
+                plan_type="PLAN_A_ORIGINAL",
+                title="Choice A: Cook for 120 Guests Anyway",
+                subtitle="Ignores 40 cancelled bookings; preps full Tuesday volume resulting in 50 unserved meals.",
+                scenario=scenario,
+                planned_items=plan_a_verde_items,
+                why_gemini_suggested="Baseline comparison. Prepares for full 120 bookings despite weather alert and rain cancellations.",
+                is_recommended=False
+            )
+            plan_a.reservation_breakdown = reservation_split
+
+            # Plan B: Blind scale down to 70 (Strawberries still rot!)
+            plan_b_verde_items = [
+                PlanItem(recipe_id="recipe_verde_alfredo", recipe_name="Creamy Garlic Fettuccine Alfredo", portions=half, dietary_tags=[DietaryTag.VEGETARIAN], cost_per_portion=2.20, total_cost=round(half * 2.20, 2)),
+                PlanItem(recipe_id="recipe_verde_pomodoro", recipe_name="Rustic Tomato Pomodoro Penne", portions=other_half, dietary_tags=[DietaryTag.VEGETARIAN, DietaryTag.VEGAN], cost_per_portion=1.35, total_cost=round(other_half * 1.35, 2)),
+                PlanItem(recipe_id="recipe_verde_soup", recipe_name="Tuscan Tomato Basil Soup", portions=15, dietary_tags=[DietaryTag.VEGAN], cost_per_portion=0.85, total_cost=12.75),
+                PlanItem(recipe_id="recipe_verde_salad", recipe_name="Strawberry & Baby Spinach Salad", portions=10, dietary_tags=[DietaryTag.VEGAN], cost_per_portion=0.88, total_cost=8.80),
+            ]
+            plan_b = self.evaluate_plan_items(
+                plan_id="plan_b_simple_scale",
+                plan_type="PLAN_B_SIMPLE_SCALE",
+                title="Choice B: Blindly Cook 40% Less of Everything",
+                subtitle="Cuts all dishes equally to 70 covers; only uses 0.5 kg strawberries, leaving 7.5 kg to spoil tomorrow.",
+                scenario=scenario,
+                planned_items=plan_b_verde_items,
+                why_gemini_suggested="Rule-of-thumb scaling. Fails to rescue the 8.0 kg perishable strawberries in the walk-in cooler.",
+                is_recommended=False
+            )
+            plan_b.reservation_breakdown = reservation_split
+
+            # Plan C: STILLGOOD Restaurant Smart Pairing
+            # Pairs heavy cream with 8 kg strawberries in dessert special!
+            # Zero cream shortage, all strawberries rescued, 2-stage prep for walk-ins!
+            has_cream_blocker = any(d.get("ingredient") == "cream" for d in scenario.supplier_disruptions)
+            alfredo_portions = 0 if has_cream_blocker else half
+            pomodoro_portions = target if has_cream_blocker else other_half
+
+            plan_c_verde_items = [
+                PlanItem(recipe_id="recipe_verde_pomodoro", recipe_name="Rustic Tomato Pomodoro Penne", portions=pomodoro_portions, dietary_tags=[DietaryTag.VEGETARIAN, DietaryTag.VEGAN], cost_per_portion=1.35, total_cost=round(pomodoro_portions * 1.35, 2)),
+                PlanItem(recipe_id="recipe_verde_soup", recipe_name="Tuscan Tomato Basil Soup", portions=25, dietary_tags=[DietaryTag.VEGAN], cost_per_portion=0.85, total_cost=21.25),
+                PlanItem(recipe_id="recipe_verde_dessert", recipe_name="Strawberries & Hand-Whipped Vanilla Cream", portions=50, dietary_tags=[DietaryTag.VEGETARIAN, DietaryTag.GLUTEN_FREE], cost_per_portion=1.15, total_cost=57.50),
+            ]
+            if not has_cream_blocker:
+                plan_c_verde_items.insert(0, PlanItem(recipe_id="recipe_verde_alfredo", recipe_name="Creamy Garlic Fettuccine Alfredo", portions=alfredo_portions, dietary_tags=[DietaryTag.VEGETARIAN], cost_per_portion=2.20, total_cost=round(alfredo_portions * 2.20, 2)))
+
+            plan_c = self.evaluate_plan_items(
+                plan_id="plan_c_smart_rescue",
+                plan_type="PLAN_C_SMART_RESCUE",
+                title="Choice C: STILLGOOD Fixed-Menu Smart Pairing",
+                subtitle="Balances hot line for 70 diners & features Strawberries & Hand-Whipped Cream dessert special to rescue all 8 kg fruit.",
+                scenario=scenario,
+                planned_items=plan_c_verde_items,
+                why_gemini_suggested=(
+                    "STILLGOOD identified that 8.0 kg of fresh strawberries were expiring tomorrow. "
+                    "By pairing them with on-hand heavy cream in your fixed menu's 'Strawberries & Hand-Whipped Vanilla Cream' dessert special, "
+                    "all 8.0 kg of fruit are completely sold at full menu price with zero spoilage, while hot pasta prep is perfectly scaled to 70 diners."
+                ),
+                is_recommended=True
+            )
+            plan_c.two_stage_prep = two_stage
+            plan_c.reservation_breakdown = reservation_split
+
+            # Rejected Candidates for Restaurant
+            rej_verde_1 = self.evaluate_plan_items(
+                plan_id="rej_verde_overprep",
+                plan_type="PLAN_REJECTED_CANDIDATE",
+                title="Rejected Candidate #1: Batch-Cooking 120 Hot Pastas in Advance",
+                subtitle="Rejected by kitchen capacity and overprep gate.",
+                scenario=scenario,
+                planned_items=[
+                    PlanItem(recipe_id="recipe_verde_alfredo", recipe_name="Creamy Garlic Fettuccine Alfredo", portions=75, dietary_tags=[DietaryTag.VEGETARIAN], cost_per_portion=2.20, total_cost=165.0),
+                    PlanItem(recipe_id="recipe_verde_pomodoro", recipe_name="Rustic Tomato Pomodoro Penne", portions=75, dietary_tags=[DietaryTag.VEGAN], cost_per_portion=1.35, total_cost=101.25),
+                ],
+                why_gemini_suggested="Pre-cooking hot pasta in bulk before walk-in arrival.",
+                is_recommended=False
+            )
+            rej_verde_1.rejection_reasons = ["Overprep Risk: Pre-cooking 150 hot pasta portions when only 70 diners are expected violates surplus minimization policy."]
+
+            rej_verde_2 = self.evaluate_plan_items(
+                plan_id="rej_verde_bad_dairy",
+                plan_type="PLAN_REJECTED_CANDIDATE",
+                title="Rejected Candidate #2: Utilizing Quarantined Custard Cream",
+                subtitle="Rejected by Food Safety Quarantine Gate.",
+                scenario=scenario,
+                planned_items=[
+                    PlanItem(recipe_id="recipe_verde_dessert", recipe_name="Strawberries & Hand-Whipped Vanilla Cream", portions=80, dietary_tags=[DietaryTag.VEGETARIAN], cost_per_portion=1.15, total_cost=92.0),
+                ],
+                why_gemini_suggested="Attempted to allocate Quarantined Cream LOT-BAD-CRM-12.",
+                is_recommended=False
+            )
+            rej_verde_2.rejection_reasons = ["Food Safety Gate Violation: Heavy Dairy Cream batch LOT-BAD-CRM-12 is QUARANTINED due to +11°C transit temperature breach. Never food-safe."]
+
+            return {
+                "plan_a": plan_a,
+                "plan_b": plan_b,
+                "plan_c": plan_c,
+                "rejected_candidates": [rej_verde_1, rej_verde_2]
+            }
+
+        # --- CORPORATE CAFETERIA SCENARIO (Default Apex Tech) ---
         # --- PLAN A: Keep Original Plan (500 Meals) ---
         plan_a_items = [
             PlanItem(

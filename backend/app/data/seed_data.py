@@ -671,3 +671,330 @@ SAMPLE_OUTCOME_LOGS: List[ActualOutcomeLog] = [
         is_sample=True
     )
 ]
+
+# Osteria Verde Bistro (Restaurant & Café with Reservations + Walk-ins & Fixed Menu)
+VERDE_INGREDIENTS: List[Ingredient] = [
+    Ingredient(id="ing_strawberries", name="Fresh Organic Strawberries", category="produce", unit="kg", cost_per_unit=3.50, min_order_qty=2.0, pack_size=2.0, storage_type=StorageType.COLD),
+    Ingredient(id="ing_heavy_cream", name="Heavy Dairy Cream", category="dairy", unit="l", cost_per_unit=4.20, min_order_qty=2.0, pack_size=2.0, storage_type=StorageType.COLD),
+    Ingredient(id="ing_plum_tomatoes", name="San Marzano Plum Tomatoes", category="produce", unit="kg", cost_per_unit=2.40, min_order_qty=5.0, pack_size=5.0, storage_type=StorageType.COLD),
+    Ingredient(id="ing_fettuccine", name="Artisanal Fettuccine Pasta (Dry)", category="grains", unit="kg", cost_per_unit=2.20, min_order_qty=5.0, pack_size=5.0, storage_type=StorageType.DRY),
+    Ingredient(id="ing_penne", name="Penne Rigate Pasta (Dry)", category="grains", unit="kg", cost_per_unit=1.80, min_order_qty=5.0, pack_size=5.0, storage_type=StorageType.DRY),
+    Ingredient(id="ing_parmesan", name="Aged Parmigiano-Reggiano", category="dairy", unit="kg", cost_per_unit=18.00, min_order_qty=1.0, pack_size=1.0, storage_type=StorageType.COLD),
+    Ingredient(id="ing_butter", name="Sweet Cream Butter", category="dairy", unit="kg", cost_per_unit=5.50, min_order_qty=2.0, pack_size=1.0, storage_type=StorageType.COLD),
+    Ingredient(id="ing_garlic_oil", name="Garlic & Extra Virgin Olive Oil", category="pantry", unit="l", cost_per_unit=6.00, min_order_qty=5.0, pack_size=5.0, storage_type=StorageType.DRY),
+    Ingredient(id="ing_vanilla_sugar", name="Madagascar Vanilla & Cane Sugar", category="pantry", unit="kg", cost_per_unit=8.00, min_order_qty=1.0, pack_size=1.0, storage_type=StorageType.DRY),
+    Ingredient(id="ing_baby_spinach_verde", name="Tender Baby Spinach Leaves", category="produce", unit="kg", cost_per_unit=3.20, min_order_qty=2.0, pack_size=2.0, storage_type=StorageType.COLD),
+]
+
+VERDE_INVENTORY: List[InventoryBatch] = [
+    # 1. Strawberries — High Priority AT_RISK Batch (8 kg expiring tomorrow!)
+    InventoryBatch(
+        id="batch_stb_001",
+        kitchen_id="kitchen_restaurant_verde",
+        ingredient_id="ing_strawberries",
+        ingredient_name="Fresh Organic Strawberries",
+        batch_code="LOT-STB-2026-1014",
+        received_date="2026-10-14",
+        expiry_date="2026-10-17",
+        initial_qty=12.0,
+        remaining_qty=8.0,
+        reserved_qty=0.0,
+        unit="kg",
+        unit_cost=3.50,
+        storage_status=BatchStorageStatus.NEAR_EXPIRY,
+        eligibility_status=BatchEligibility.AT_RISK,
+        notes="Ripe organic strawberries approaching 24h shelf-life limit. Ideal for Strawberries & Hand-Whipped Vanilla Cream dessert."
+    ),
+    # 2. Heavy Cream — In stock and fresh!
+    InventoryBatch(
+        id="batch_crm_001",
+        kitchen_id="kitchen_restaurant_verde",
+        ingredient_id="ing_heavy_cream",
+        ingredient_name="Heavy Dairy Cream",
+        batch_code="LOT-CRM-2026-1015",
+        received_date="2026-10-15",
+        expiry_date="2026-10-24",
+        initial_qty=15.0,
+        remaining_qty=14.0,
+        reserved_qty=0.0,
+        unit="l",
+        unit_cost=4.20,
+        storage_status=BatchStorageStatus.OPTIMAL,
+        eligibility_status=BatchEligibility.ELIGIBLE,
+        notes="Chilled dairy storage. Delivered on time."
+    ),
+    # 3. San Marzano Plum Tomatoes
+    InventoryBatch(
+        id="batch_tom_001",
+        kitchen_id="kitchen_restaurant_verde",
+        ingredient_id="ing_plum_tomatoes",
+        ingredient_name="San Marzano Plum Tomatoes",
+        batch_code="LOT-TOM-2026-1014",
+        received_date="2026-10-14",
+        expiry_date="2026-10-22",
+        initial_qty=35.0,
+        remaining_qty=30.0,
+        reserved_qty=0.0,
+        unit="kg",
+        unit_cost=2.40,
+        storage_status=BatchStorageStatus.OPTIMAL,
+        eligibility_status=BatchEligibility.ELIGIBLE,
+        notes="Fresh vine plum tomatoes for Rustic Pomodoro sauce."
+    ),
+    # 4. Fettuccine Pasta
+    InventoryBatch(
+        id="batch_pst_001",
+        kitchen_id="kitchen_restaurant_verde",
+        ingredient_id="ing_fettuccine",
+        ingredient_name="Artisanal Fettuccine Pasta (Dry)",
+        batch_code="LOT-PST-2026-0810",
+        received_date="2026-08-10",
+        expiry_date="2027-08-10",
+        initial_qty=30.0,
+        remaining_qty=25.0,
+        reserved_qty=0.0,
+        unit="kg",
+        unit_cost=2.20,
+        storage_status=BatchStorageStatus.OPTIMAL,
+        eligibility_status=BatchEligibility.ELIGIBLE,
+        notes="Dry pantry Italian semolina pasta."
+    ),
+    # 5. Penne Rigate Pasta
+    InventoryBatch(
+        id="batch_pen_001",
+        kitchen_id="kitchen_restaurant_verde",
+        ingredient_id="ing_penne",
+        ingredient_name="Penne Rigate Pasta (Dry)",
+        batch_code="LOT-PEN-2026-0810",
+        received_date="2026-08-10",
+        expiry_date="2027-08-10",
+        initial_qty=30.0,
+        remaining_qty=25.0,
+        reserved_qty=0.0,
+        unit="kg",
+        unit_cost=1.80,
+        storage_status=BatchStorageStatus.OPTIMAL,
+        eligibility_status=BatchEligibility.ELIGIBLE,
+        notes="Dry pantry pasta."
+    ),
+    # 6. Parmigiano-Reggiano
+    InventoryBatch(
+        id="batch_prm_001",
+        kitchen_id="kitchen_restaurant_verde",
+        ingredient_id="ing_parmesan",
+        ingredient_name="Aged Parmigiano-Reggiano",
+        batch_code="LOT-PRM-2026-0901",
+        received_date="2026-09-01",
+        expiry_date="2026-12-01",
+        initial_qty=10.0,
+        remaining_qty=8.0,
+        reserved_qty=0.0,
+        unit="kg",
+        unit_cost=18.00,
+        storage_status=BatchStorageStatus.OPTIMAL,
+        eligibility_status=BatchEligibility.ELIGIBLE,
+        notes="Aged 24 months cheese wheel."
+    ),
+    # 7. Baby Spinach
+    InventoryBatch(
+        id="batch_spn_002",
+        kitchen_id="kitchen_restaurant_verde",
+        ingredient_id="ing_baby_spinach_verde",
+        ingredient_name="Tender Baby Spinach Leaves",
+        batch_code="LOT-SPN-2026-1014",
+        received_date="2026-10-14",
+        expiry_date="2026-10-21",
+        initial_qty=10.0,
+        remaining_qty=8.0,
+        reserved_qty=0.0,
+        unit="kg",
+        unit_cost=3.20,
+        storage_status=BatchStorageStatus.OPTIMAL,
+        eligibility_status=BatchEligibility.ELIGIBLE,
+        notes="Crisp salad greens."
+    ),
+    # 8. Quarantined Custard — Strict Food Safety Demo
+    InventoryBatch(
+        id="batch_bad_custard",
+        kitchen_id="kitchen_restaurant_verde",
+        ingredient_id="ing_heavy_cream",
+        ingredient_name="Heavy Dairy Cream (Quarantined Batch)",
+        batch_code="LOT-BAD-CRM-12",
+        received_date="2026-10-15",
+        expiry_date="2026-10-20",
+        initial_qty=10.0,
+        remaining_qty=10.0,
+        reserved_qty=0.0,
+        unit="l",
+        unit_cost=4.20,
+        storage_status=BatchStorageStatus.QUARANTINED,
+        eligibility_status=BatchEligibility.INELIGIBLE,
+        notes="QUARANTINED BY CHEF: Temperature data-logger logged +11°C during transit. Unsafe for food prep."
+    )
+]
+
+VERDE_RECIPES: List[Recipe] = [
+    # 1. Creamy Garlic Fettuccine Alfredo
+    Recipe(
+        id="recipe_verde_alfredo",
+        kitchen_id="kitchen_restaurant_verde",
+        name="Creamy Garlic Fettuccine Alfredo",
+        category="main",
+        dietary_tags=[DietaryTag.VEGETARIAN],
+        portion_size_grams=320,
+        base_prep_time_minutes=15,
+        allergens=["Dairy", "Gluten"],
+        ingredients=[
+            RecipeIngredient(ingredient_id="ing_fettuccine", ingredient_name="Artisanal Fettuccine Pasta (Dry)", qty_per_portion=0.11, unit="kg", is_core=True),
+            RecipeIngredient(ingredient_id="ing_heavy_cream", ingredient_name="Heavy Dairy Cream", qty_per_portion=0.08, unit="l", is_core=True),
+            RecipeIngredient(ingredient_id="ing_parmesan", ingredient_name="Aged Parmigiano-Reggiano", qty_per_portion=0.03, unit="kg", is_core=False),
+        ],
+        cost_per_portion=2.20,
+        approved=True,
+        version=1
+    ),
+    # 2. Rustic Tomato Pomodoro Penne
+    Recipe(
+        id="recipe_verde_pomodoro",
+        kitchen_id="kitchen_restaurant_verde",
+        name="Rustic Tomato Pomodoro Penne",
+        category="main",
+        dietary_tags=[DietaryTag.VEGETARIAN, DietaryTag.VEGAN, DietaryTag.DAIRY_FREE],
+        portion_size_grams=310,
+        base_prep_time_minutes=12,
+        allergens=["Gluten"],
+        ingredients=[
+            RecipeIngredient(ingredient_id="ing_penne", ingredient_name="Penne Rigate Pasta (Dry)", qty_per_portion=0.11, unit="kg", is_core=True),
+            RecipeIngredient(ingredient_id="ing_plum_tomatoes", ingredient_name="San Marzano Plum Tomatoes", qty_per_portion=0.14, unit="kg", is_core=True),
+        ],
+        cost_per_portion=1.35,
+        approved=True,
+        version=2
+    ),
+    # 3. Fresh Tomato Basil Soup
+    Recipe(
+        id="recipe_verde_soup",
+        kitchen_id="kitchen_restaurant_verde",
+        name="Tuscan Tomato Basil Soup",
+        category="soup",
+        dietary_tags=[DietaryTag.VEGETARIAN, DietaryTag.VEGAN, DietaryTag.GLUTEN_FREE, DietaryTag.DAIRY_FREE],
+        portion_size_grams=250,
+        base_prep_time_minutes=25,
+        allergens=[],
+        ingredients=[
+            RecipeIngredient(ingredient_id="ing_plum_tomatoes", ingredient_name="San Marzano Plum Tomatoes", qty_per_portion=0.16, unit="kg", is_core=True),
+        ],
+        cost_per_portion=0.85,
+        approved=True,
+        version=1
+    ),
+    # 4. Strawberries & Hand-Whipped Vanilla Cream (Rescues 8 kg Strawberries + Cream!)
+    Recipe(
+        id="recipe_verde_dessert",
+        kitchen_id="kitchen_restaurant_verde",
+        name="Strawberries & Hand-Whipped Vanilla Cream",
+        category="dessert",
+        dietary_tags=[DietaryTag.VEGETARIAN, DietaryTag.GLUTEN_FREE],
+        portion_size_grams=180,
+        base_prep_time_minutes=10,
+        allergens=["Dairy"],
+        ingredients=[
+            RecipeIngredient(ingredient_id="ing_strawberries", ingredient_name="Fresh Organic Strawberries", qty_per_portion=0.10, unit="kg", is_core=True),
+            RecipeIngredient(ingredient_id="ing_heavy_cream", ingredient_name="Heavy Dairy Cream", qty_per_portion=0.06, unit="l", is_core=True),
+        ],
+        cost_per_portion=1.15,
+        approved=True,
+        version=1
+    ),
+    # 5. Strawberry Baby Spinach Salad
+    Recipe(
+        id="recipe_verde_salad",
+        kitchen_id="kitchen_restaurant_verde",
+        name="Strawberry & Baby Spinach Salad",
+        category="salad",
+        dietary_tags=[DietaryTag.VEGETARIAN, DietaryTag.VEGAN, DietaryTag.GLUTEN_FREE, DietaryTag.DAIRY_FREE],
+        portion_size_grams=160,
+        base_prep_time_minutes=8,
+        allergens=[],
+        ingredients=[
+            RecipeIngredient(ingredient_id="ing_strawberries", ingredient_name="Fresh Organic Strawberries", qty_per_portion=0.05, unit="kg", is_core=True),
+            RecipeIngredient(ingredient_id="ing_baby_spinach_verde", ingredient_name="Tender Baby Spinach Leaves", qty_per_portion=0.08, unit="kg", is_core=True),
+        ],
+        cost_per_portion=0.88,
+        approved=True,
+        version=1
+    )
+]
+
+VERDE_SUPPLIERS: List[Supplier] = [
+    Supplier(
+        id="sup_valle_dairy",
+        name="Valle Creamery & Dairy",
+        contact="orders@valledairy.com | (555) 234-8901",
+        lead_time_hours=8,
+        cutoff_time="10:00 AM",
+        minimum_order_value=60.0,
+        supplies_ingredients=["ing_heavy_cream", "ing_butter", "ing_parmesan"],
+        status="active"
+    ),
+    Supplier(
+        id="sup_tuscan_produce",
+        name="Tuscan Fresh Daily Produce",
+        contact="dispatch@tuscanproduce.com",
+        lead_time_hours=6,
+        cutoff_time="11:00 AM",
+        minimum_order_value=40.0,
+        supplies_ingredients=["ing_strawberries", "ing_plum_tomatoes", "ing_baby_spinach_verde"],
+        status="active"
+    ),
+    Supplier(
+        id="sup_italian_pantry",
+        name="Roma Foodservice Commodities",
+        contact="pantry@romacommodities.com",
+        lead_time_hours=24,
+        cutoff_time="04:00 PM",
+        minimum_order_value=100.0,
+        supplies_ingredients=["ing_fettuccine", "ing_penne", "ing_garlic_oil", "ing_vanilla_sugar"],
+        status="active"
+    )
+]
+
+VERDE_OUTCOME_LOGS: List[ActualOutcomeLog] = [
+    ActualOutcomeLog(
+        id="log_verde_1014",
+        kitchen_id="kitchen_restaurant_verde",
+        plan_id="plan_verde_prev",
+        service_date="2026-10-14",
+        service_period="Dinner",
+        meals_planned=110,
+        meals_prepared=105,
+        meals_served=102,
+        unserved_portions=3,
+        discarded_weight_kg=1.8,
+        ingredient_spoilage_kg=0.3,
+        prep_waste_kg=0.9,
+        plate_waste_kg=0.6,
+        stockouts_count=0,
+        notes="Smooth dinner service. 70 reservations + 32 walk-ins.",
+        is_sample=True
+    ),
+    ActualOutcomeLog(
+        id="log_verde_1015",
+        kitchen_id="kitchen_restaurant_verde",
+        plan_id="plan_verde_prev2",
+        service_date="2026-10-15",
+        service_period="Dinner",
+        meals_planned=115,
+        meals_prepared=110,
+        meals_served=108,
+        unserved_portions=2,
+        discarded_weight_kg=1.4,
+        ingredient_spoilage_kg=0.2,
+        prep_waste_kg=0.8,
+        plate_waste_kg=0.4,
+        stockouts_count=0,
+        notes="Strawberry dessert special sold out all 8 kg. Zero spoilage.",
+        is_sample=True
+    )
+]
+

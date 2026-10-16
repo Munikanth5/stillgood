@@ -21,6 +21,11 @@ export interface KitchenProfile {
   is_sample: boolean;
   dietary_strictness: string;
   primary_demand_driver: string;
+  confirmed_reservations?: number;
+  predicted_walkins?: number;
+  menu_type?: string;
+  stage_1_prep_label?: string;
+  stage_2_prep_label?: string;
 }
 
 export interface InventoryBatch {
@@ -83,6 +88,8 @@ export interface ParsedScenario {
   original_expected_meals: number;
   revised_expected_meals: number;
   service_buffer_percentage: number;
+  confirmed_reservations?: number;
+  predicted_walkins?: number;
   supplier_disruptions: Array<{
     supplier_name: string;
     ingredient: string;
@@ -172,6 +179,18 @@ export interface PlanEvaluation {
   rejection_reasons: string[];
   summary_explanation: string;
   why_gemini_suggested?: string;
+  two_stage_prep?: {
+    stage_1_portions: number;
+    stage_2_portions: number;
+    stage_1_label: string;
+    stage_2_label: string;
+    details: string[];
+  };
+  reservation_breakdown?: {
+    confirmed_reservations: number;
+    predicted_walkins: number;
+    total_target: number;
+  };
 }
 
 export interface EvidenceReceipt {

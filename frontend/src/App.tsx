@@ -138,6 +138,27 @@ export const App: React.FC = () => {
   const handleSelectKitchen = async (k: KitchenProfile) => {
     setCurrentKitchen(k);
     await loadKitchenData(k.id);
+
+    try {
+      const scenarioText = (k.id === 'kitchen_restaurant_verde' || k.type === 'restaurant_cafe')
+        ? 'Rainstorm alert: 40 dinner reservations cancelled (70 confirmed bookings remaining + 35 walk-ins). Supplier Country Fresh Dairy delayed (no heavy cream before dinner). At-risk fresh strawberries (8 kg) need rescue.'
+        : 'Tomorrow attendance has dropped from 500 to 350. The paneer supplier cannot deliver before lunch. Keep at least 120 vegetarian meals and prioritize eligible spinach if feasible.';
+
+      const newScenario = await interpretDisruption(scenarioText, k.id);
+      setScenario(newScenario);
+
+      const replanRes = await calculateReplan(newScenario);
+      setPlans({
+        plan_a: replanRes.plans.plan_a,
+        plan_b: replanRes.plans.plan_b,
+        plan_c: replanRes.plans.plan_c,
+        rejected_candidates: replanRes.plans.rejected_candidates
+      });
+      setActivePlan(replanRes.plans.plan_c);
+      setEvidenceReceipt(replanRes.evidence_receipt);
+    } catch (e) {
+      console.error('Error generating kitchen scenario:', e);
+    }
   };
 
   const handleResetDemo = async () => {

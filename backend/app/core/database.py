@@ -8,7 +8,9 @@ from app.models.schemas import (
 )
 from app.data.seed_data import (
     KITCHEN_PROFILES, APEX_INGREDIENTS, APEX_INVENTORY,
-    APEX_RECIPES, APEX_SUPPLIERS, SAMPLE_OUTCOME_LOGS
+    APEX_RECIPES, APEX_SUPPLIERS, SAMPLE_OUTCOME_LOGS,
+    VERDE_INGREDIENTS, VERDE_INVENTORY, VERDE_RECIPES,
+    VERDE_SUPPLIERS, VERDE_OUTCOME_LOGS
 )
 
 logger = logging.getLogger("stillgood.db")
@@ -27,25 +29,33 @@ class KitchenDatabase:
         """Resets database state to initial clean hackathon demonstration state."""
         self.kitchens: Dict[str, KitchenProfile] = copy.deepcopy(KITCHEN_PROFILES)
         self.ingredients: Dict[str, Any] = {i.id: copy.deepcopy(i) for i in APEX_INGREDIENTS}
+        for ing in VERDE_INGREDIENTS:
+            self.ingredients[ing.id] = copy.deepcopy(ing)
+
         self.inventory: Dict[str, List[InventoryBatch]] = {
-            "kitchen_corporate_apex": copy.deepcopy(APEX_INVENTORY)
+            "kitchen_corporate_apex": copy.deepcopy(APEX_INVENTORY),
+            "kitchen_restaurant_verde": copy.deepcopy(VERDE_INVENTORY)
         }
         self.recipes: Dict[str, List[Recipe]] = {
-            "kitchen_corporate_apex": copy.deepcopy(APEX_RECIPES)
+            "kitchen_corporate_apex": copy.deepcopy(APEX_RECIPES),
+            "kitchen_restaurant_verde": copy.deepcopy(VERDE_RECIPES)
         }
         self.suppliers: Dict[str, List[Supplier]] = {
-            "kitchen_corporate_apex": copy.deepcopy(APEX_SUPPLIERS)
+            "kitchen_corporate_apex": copy.deepcopy(APEX_SUPPLIERS),
+            "kitchen_restaurant_verde": copy.deepcopy(VERDE_SUPPLIERS)
         }
         self.scenarios: Dict[str, ParsedScenario] = {}
         self.plans: Dict[str, Dict[str, Any]] = {}
         self.receipts: Dict[str, EvidenceReceipt] = {}
         self.approvals: Dict[str, List[ApprovalRecord]] = {
-            "kitchen_corporate_apex": []
+            "kitchen_corporate_apex": [],
+            "kitchen_restaurant_verde": []
         }
         self.outcomes: Dict[str, List[ActualOutcomeLog]] = {
-            "kitchen_corporate_apex": copy.deepcopy(SAMPLE_OUTCOME_LOGS)
+            "kitchen_corporate_apex": copy.deepcopy(SAMPLE_OUTCOME_LOGS),
+            "kitchen_restaurant_verde": copy.deepcopy(VERDE_OUTCOME_LOGS)
         }
-        logger.info("KitchenDatabase reset to verified demo state.")
+        logger.info("KitchenDatabase reset to verified demo state with restaurant & cafeteria support.")
 
     # Kitchen Profiles
     def get_kitchens(self) -> List[KitchenProfile]:

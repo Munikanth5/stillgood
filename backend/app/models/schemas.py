@@ -52,6 +52,11 @@ class KitchenProfile(BaseModel):
     is_sample: bool = True
     dietary_strictness: str = "standard"  # "clinical_strict" for hospitals
     primary_demand_driver: str  # e.g., "Office Attendance", "Table Bookings", "Room Occupancy"
+    confirmed_reservations: int = 70
+    predicted_walkins: int = 35
+    menu_type: str = "Fixed Printed Menu"
+    stage_1_prep_label: str = "Stage 1: Pre-Service Hot Prep (Cook before doors open)"
+    stage_2_prep_label: str = "Stage 2: Quick-Fire Cold Reserve (Portioned in cooler for walk-ins)"
 
 class Ingredient(BaseModel):
     id: str
@@ -125,6 +130,8 @@ class ParsedScenario(BaseModel):
     original_expected_meals: int
     revised_expected_meals: int
     service_buffer_percentage: float = 5.0
+    confirmed_reservations: Optional[int] = 70
+    predicted_walkins: Optional[int] = 35
     supplier_disruptions: List[Dict[str, Any]] = []
     dietary_constraints: List[Dict[str, Any]] = []
     inventory_priorities: List[str] = []
@@ -172,6 +179,8 @@ class PlanEvaluation(BaseModel):
     rejection_reasons: List[str] = []
     summary_explanation: str
     why_gemini_suggested: Optional[str] = None
+    two_stage_prep: Optional[Dict[str, Any]] = None
+    reservation_breakdown: Optional[Dict[str, Any]] = None
 
 class EvidenceReceipt(BaseModel):
     receipt_id: str

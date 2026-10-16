@@ -138,3 +138,58 @@ def test_rescue_planner_hackathon_scenario():
     assert receipt.modeled_surplus_avoidance_meals > 0
     assert receipt.modeled_purchase_savings_cost > 0
     assert receipt.modeled_at_risk_rescued_kg >= 14.0
+
+def test_rescue_planner_restaurant_verde_fixed_menu_and_two_stage_prep():
+    from app.data.seed_data import (
+        VERDE_INGREDIENTS, VERDE_INVENTORY, VERDE_RECIPES, VERDE_SUPPLIERS
+    )
+    kitchen = KITCHEN_PROFILES["kitchen_restaurant_verde"]
+    planner = RescuePlanner(
+        kitchen=kitchen,
+        recipes=VERDE_RECIPES,
+        inventory=VERDE_INVENTORY,
+        ingredients=VERDE_INGREDIENTS,
+        suppliers=VERDE_SUPPLIERS
+    )
+
+    # Restaurant scenario: 40 cancellations (70 left), cream supplier delayed, at-risk strawberries
+    scenario = ParsedScenario(
+        scenario_id="SCEN-VERDE-001",
+        kitchen_id="kitchen_restaurant_verde",
+        original_expected_meals=120,
+        revised_expected_meals=70,
+        service_buffer_percentage=5.0,
+        supplier_disruptions=[{
+            "supplier_name": "Country Fresh Dairy",
+            "ingredient": "cream",
+            "status": "delayed_after_lunch"
+        }],
+        dietary_constraints=[{"tag": "vegetarian", "min_meals": 35}],
+        inventory_priorities=["strawberries"],
+        excluded_ingredients=["cream"],
+        raw_explanation="Rainstorm: 40 table cancellations. 70 confirmed diners remaining. Dairy delayed."
+    )
+
+    bundle = planner.generate_all_scenario_plans(scenario)
+
+    # Plan A: Prepares for 120 anyway (50 meals wasted)
+    plan_a = bundle["plan_a"]
+    assert plan_a.expected_surplus_meals == 50
+
+    # Plan B: Scales blindly, fails to rescue strawberries
+    plan_b = bundle["plan_b"]
+    assert plan_b.is_recommended is False
+
+    # Plan C: Fixed-Menu Smart Pairing with Two-Stage Prep
+    plan_c = bundle["plan_c"]
+    assert plan_c.is_recommended is True
+    assert plan_c.two_stage_prep is not None
+    assert plan_c.two_stage_prep["stage_1_portions"] == 70  # Pre-service hot line for confirmed reservations
+    assert plan_c.two_stage_prep["stage_2_portions"] == 0   # Target 70 was all confirmed
+    assert "Strawberries & Hand-Whipped Vanilla Cream" in [item.recipe_name for item in plan_c.planned_items]
+
+    # Verify food safety: Quarantined batch LOT-BAD-CRM-12 was never allocated
+    allocated_batches = [a["batch_code"] for a in plan_c.inventory_allocated]
+    assert "LOT-BAD-CRM-12" not in allocated_batches
+    assert len(bundle["rejected_candidates"]) >= 2
+
