@@ -189,32 +189,57 @@ class RescuePlanner:
             plan_b.reservation_breakdown = reservation_split
 
             # Plan C: STILLGOOD Restaurant Smart Pairing
-            # Pairs heavy cream with 8 kg strawberries in dessert special!
-            # Zero cream shortage, all strawberries rescued, 2-stage prep for walk-ins!
+            # Pairs heavy cream with 8 kg strawberries in dessert special (or substitutes if strawberries out of stock)
+            # Zero cream shortage, 2-stage prep for walk-ins!
             has_cream_blocker = any(d.get("ingredient") == "cream" for d in scenario.supplier_disruptions)
+            has_strawberry_outage = "strawberries" in scenario.excluded_ingredients or any(
+                "strawberr" in d.get("ingredient", "").lower() and d.get("status") in ["out_of_stock", "delayed"]
+                for d in scenario.supplier_disruptions
+            )
             alfredo_portions = 0 if has_cream_blocker else half
             pomodoro_portions = target if has_cream_blocker else other_half
 
-            plan_c_verde_items = [
-                PlanItem(recipe_id="recipe_verde_pomodoro", recipe_name="Rustic Tomato Pomodoro Penne", portions=pomodoro_portions, dietary_tags=[DietaryTag.VEGETARIAN, DietaryTag.VEGAN], cost_per_portion=1.35, total_cost=round(pomodoro_portions * 1.35, 2)),
-                PlanItem(recipe_id="recipe_verde_soup", recipe_name="Tuscan Tomato Basil Soup", portions=25, dietary_tags=[DietaryTag.VEGAN], cost_per_portion=0.85, total_cost=21.25),
-                PlanItem(recipe_id="recipe_verde_dessert", recipe_name="Strawberries & Hand-Whipped Vanilla Cream", portions=50, dietary_tags=[DietaryTag.VEGETARIAN, DietaryTag.GLUTEN_FREE], cost_per_portion=1.15, total_cost=57.50),
-            ]
-            if not has_cream_blocker:
-                plan_c_verde_items.insert(0, PlanItem(recipe_id="recipe_verde_alfredo", recipe_name="Creamy Garlic Fettuccine Alfredo", portions=alfredo_portions, dietary_tags=[DietaryTag.VEGETARIAN], cost_per_portion=2.20, total_cost=round(alfredo_portions * 2.20, 2)))
+            if has_strawberry_outage:
+                # 86'd strawberries: do not plan strawberry dessert or salad; scale pasta & soup for guests
+                plan_c_verde_items = [
+                    PlanItem(recipe_id="recipe_verde_pomodoro", recipe_name="Rustic Tomato Pomodoro Penne", portions=pomodoro_portions, dietary_tags=[DietaryTag.VEGETARIAN, DietaryTag.VEGAN], cost_per_portion=1.35, total_cost=round(pomodoro_portions * 1.35, 2)),
+                    PlanItem(recipe_id="recipe_verde_soup", recipe_name="Tuscan Tomato Basil Soup", portions=35, dietary_tags=[DietaryTag.VEGAN], cost_per_portion=0.85, total_cost=29.75),
+                ]
+                if not has_cream_blocker:
+                    plan_c_verde_items.insert(0, PlanItem(recipe_id="recipe_verde_alfredo", recipe_name="Creamy Garlic Fettuccine Alfredo", portions=alfredo_portions, dietary_tags=[DietaryTag.VEGETARIAN], cost_per_portion=2.20, total_cost=round(alfredo_portions * 2.20, 2)))
+
+                plan_c_title = "Choice C: STILLGOOD Out-of-Stock Substitution Plan"
+                plan_c_subtitle = f"86'd all strawberry recipes due to supplier outage; scaled pasta & soup lines for {target} diners."
+                plan_c_why = (
+                    f"STILLGOOD identified that fresh strawberries are out of stock for the next 5 days. "
+                    f"All strawberry recipes ('Strawberries & Whipped Cream' and 'Strawberry Salad') were automatically 86'd from tonight's prep sheet. "
+                    f"Prep has been safely reallocated to hearty Tomato Pomodoro penne and Tuscan Tomato soup to satisfy all {target} guests without missing-ingredient service delays."
+                )
+            else:
+                plan_c_verde_items = [
+                    PlanItem(recipe_id="recipe_verde_pomodoro", recipe_name="Rustic Tomato Pomodoro Penne", portions=pomodoro_portions, dietary_tags=[DietaryTag.VEGETARIAN, DietaryTag.VEGAN], cost_per_portion=1.35, total_cost=round(pomodoro_portions * 1.35, 2)),
+                    PlanItem(recipe_id="recipe_verde_soup", recipe_name="Tuscan Tomato Basil Soup", portions=25, dietary_tags=[DietaryTag.VEGAN], cost_per_portion=0.85, total_cost=21.25),
+                    PlanItem(recipe_id="recipe_verde_dessert", recipe_name="Strawberries & Hand-Whipped Vanilla Cream", portions=50, dietary_tags=[DietaryTag.VEGETARIAN, DietaryTag.GLUTEN_FREE], cost_per_portion=1.15, total_cost=57.50),
+                ]
+                if not has_cream_blocker:
+                    plan_c_verde_items.insert(0, PlanItem(recipe_id="recipe_verde_alfredo", recipe_name="Creamy Garlic Fettuccine Alfredo", portions=alfredo_portions, dietary_tags=[DietaryTag.VEGETARIAN], cost_per_portion=2.20, total_cost=round(alfredo_portions * 2.20, 2)))
+
+                plan_c_title = "Choice C: STILLGOOD Fixed-Menu Smart Pairing"
+                plan_c_subtitle = f"Balances hot line for {target} diners & features Strawberries & Hand-Whipped Cream dessert special to rescue all 8 kg fruit."
+                plan_c_why = (
+                    "STILLGOOD identified that 8.0 kg of fresh strawberries were expiring tomorrow. "
+                    "By pairing them with on-hand heavy cream in your fixed menu's 'Strawberries & Hand-Whipped Vanilla Cream' dessert special, "
+                    f"all 8.0 kg of fruit are completely sold at full menu price with zero spoilage, while hot pasta prep is perfectly scaled to {target} diners."
+                )
 
             plan_c = self.evaluate_plan_items(
                 plan_id="plan_c_smart_rescue",
                 plan_type="PLAN_C_SMART_RESCUE",
-                title="Choice C: STILLGOOD Fixed-Menu Smart Pairing",
-                subtitle="Balances hot line for 70 diners & features Strawberries & Hand-Whipped Cream dessert special to rescue all 8 kg fruit.",
+                title=plan_c_title,
+                subtitle=plan_c_subtitle,
                 scenario=scenario,
                 planned_items=plan_c_verde_items,
-                why_gemini_suggested=(
-                    "STILLGOOD identified that 8.0 kg of fresh strawberries were expiring tomorrow. "
-                    "By pairing them with on-hand heavy cream in your fixed menu's 'Strawberries & Hand-Whipped Vanilla Cream' dessert special, "
-                    "all 8.0 kg of fruit are completely sold at full menu price with zero spoilage, while hot pasta prep is perfectly scaled to 70 diners."
-                ),
+                why_gemini_suggested=plan_c_why,
                 is_recommended=True
             )
             plan_c.two_stage_prep = two_stage

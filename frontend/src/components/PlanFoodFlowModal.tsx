@@ -48,7 +48,7 @@ export const PlanFoodFlowModal: React.FC<PlanFoodFlowModalProps> = ({
   onOpenReceipt
 }) => {
   const isRestaurant = kitchen.type === 'restaurant_cafe';
-  const baselineMeals = kitchen.capacity_meals_per_service || (isRestaurant ? 120 : 500);
+  const baselineMeals = isRestaurant ? 120 : (kitchen.capacity_meals_per_service || 500);
 
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
   const [expectedMeals, setExpectedMeals] = useState<number>(isRestaurant ? 105 : 350);
@@ -100,6 +100,7 @@ export const PlanFoodFlowModal: React.FC<PlanFoodFlowModalProps> = ({
 
       const scenario = await interpretDisruption(fullText, kitchen.id);
       scenario.revised_expected_meals = expectedMeals;
+      scenario.dietary_constraints = [{ tag: 'vegetarian', min_meals: Math.min(minVegPortions, expectedMeals) }];
 
       const result = await calculateReplan(scenario);
       setReplanData(result);
@@ -113,7 +114,7 @@ export const PlanFoodFlowModal: React.FC<PlanFoodFlowModalProps> = ({
 
   const activePlan = replanData?.plans.plan_c || null;
   const originalMeals = baselineMeals;
-  const diffMeals = expectedMeals - originalMeals;
+  const diffMeals = activePlan ? (activePlan.total_portions - originalMeals) : (expectedMeals - originalMeals);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-cocoa/60 backdrop-blur-sm overflow-y-auto">
@@ -460,7 +461,7 @@ export const PlanFoodFlowModal: React.FC<PlanFoodFlowModalProps> = ({
 
                 {/* One sentence explanation */}
                 <div className="p-3 bg-oat rounded-xl border border-subtle text-xs text-espresso/80">
-                  <strong>Why this changed:</strong> {activePlan.summary_explanation}
+                  <strong>Why this changed:</strong> {activePlan.why_gemini_suggested || activePlan.subtitle || activePlan.summary_explanation}
                 </div>
 
                 <div className="text-[10px] text-espresso/50 italic text-center">

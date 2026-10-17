@@ -68,8 +68,10 @@ Rules:
                 logger.warning(f"Live Gemini extraction encountered error: {e}. Switching to deterministic parser.")
 
         # 2. Robust Deterministic Parser (Always works offline & testable)
-        revised_meals = 350
-        original_meals = 500
+        is_restaurant = "verde" in kitchen_id or "restaurant" in kitchen_id
+        revised_meals = 70 if is_restaurant else 350
+        original_meals = 120 if is_restaurant else 500
+        default_veg = 35 if is_restaurant else 120
 
         # Extract number patterns: e.g. "from 500 to 350" or "dropped to 350"
         from_to_match = re.search(r"from\s+(\d+)\s+to\s+(\d+)", text, re.IGNORECASE)
@@ -92,7 +94,7 @@ Rules:
         else:
             dietary_constraints.append({
                 "tag": "vegetarian",
-                "min_meals": 120
+                "min_meals": default_veg
             })
 
         # Supplier disruptions
@@ -107,17 +109,50 @@ Rules:
                 "detail": "Delivery delayed past 2:00 PM lunch service cutoff."
             })
 
+        if "cream" in text.lower() and ("delay" in text.lower() or "no " in text.lower()):
+            excluded_ingredients.append("cream")
+            supplier_disruptions.append({
+                "supplier_name": "Country Fresh Dairy",
+                "ingredient": "cream",
+                "status": "delayed_after_lunch",
+                "detail": "Delivery delayed past dinner service cutoff."
+            })
+
+        if "strawberr" in text.lower():
+            if any(term in text.lower() for term in ["out of stock", "unavailable", "not available", "shortage", "missing"]):
+                excluded_ingredients.append("strawberries")
+                supplier_disruptions.append({
+                    "supplier_name": "Organic Berry Collective",
+                    "ingredient": "strawberries",
+                    "status": "out_of_stock",
+                    "detail": "Fresh strawberries out of stock for upcoming service periods."
+                })
+
         # Inventory priorities
         inventory_priorities = []
         if "spinach" in text.lower():
             inventory_priorities.append("spinach")
+        if "strawberr" in text.lower() and "strawberries" not in excluded_ingredients:
+            inventory_priorities.append("strawberries")
 
-        explanation = (
-            f"Detected attendance shift from {original_meals} to {revised_meals} meals. "
-            f"Identified paneer supplier delay (ingredient locked for lunch). "
-            f"Enforced minimum {dietary_constraints[0]['min_meals']} vegetarian meals. "
-            f"Prioritizing eligible at-risk spinach."
-        )
+        exp_parts = []
+        if original_meals != revised_meals:
+            exp_parts.append(f"Detected attendance shift from {original_meals} to {revised_meals} meals.")
+        else:
+            exp_parts.append(f"Targeting {revised_meals} meals for service.")
+
+        if "paneer" in excluded_ingredients:
+            exp_parts.append("Identified paneer supplier delay (ingredient locked for lunch).")
+        if "strawberries" in excluded_ingredients:
+            exp_parts.append("Identified fresh strawberry stock outage (excluding strawberry recipes).")
+        if "cream" in excluded_ingredients:
+            exp_parts.append("Identified dairy cream delivery delay.")
+
+        if inventory_priorities:
+            exp_parts.append(f"Prioritizing eligible at-risk {', '.join(inventory_priorities)}.")
+
+        exp_parts.append(f"Enforced minimum {dietary_constraints[0]['min_meals']} vegetarian meals.")
+        explanation = " ".join(exp_parts)
 
         return ParsedScenario(
             scenario_id=scenario_id,

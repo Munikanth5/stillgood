@@ -146,3 +146,28 @@ def test_atomic_combo_order_and_overselling_protection():
         "customer_name": "Overseller"
     })
     assert excess_res.status_code == 400
+
+
+def test_strawberry_out_of_stock_disruption_and_plan():
+    # 1. Test Disruption Interpretation for out of stock strawberries
+    interpret_res = client.post("/api/ai/interpret", json={
+        "raw_text": "strawberries out of stock not available for next five days",
+        "kitchen_id": "kitchen_restaurant_verde"
+    })
+    assert interpret_res.status_code == 200
+    scenario = interpret_res.json()
+    assert "strawberries" in scenario["excluded_ingredients"]
+    assert any(d["ingredient"] == "strawberries" and d["status"] == "out_of_stock" for d in scenario["supplier_disruptions"])
+
+    # 2. Test Plan Generation using this scenario
+    replan_res = client.post("/api/plans/replan", json=scenario)
+    assert replan_res.status_code == 200
+    replan_data = replan_res.json()
+    plan_c = replan_data["plans"]["plan_c"]
+    assert plan_c["is_recommended"] is True
+    # Verify no strawberry dishes are planned
+    planned_dish_names = [item["recipe_name"] for item in plan_c["planned_items"]]
+    assert not any("strawberr" in name.lower() for name in planned_dish_names)
+    assert "Tuscan Tomato Basil Soup" in planned_dish_names
+    assert "Rustic Tomato Pomodoro Penne" in planned_dish_names
+
