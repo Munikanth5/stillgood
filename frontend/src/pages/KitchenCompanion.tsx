@@ -74,6 +74,15 @@ export const KitchenCompanion: React.FC<KitchenCompanionProps> = ({
     else if (actionType === 'replan') onNavigateToTab('comparison');
   };
 
+  if (loading && !summary) {
+    return (
+      <div className="py-20 text-center space-y-3 bg-white rounded-2xl border border-subtle">
+        <div className="w-8 h-8 border-3 border-terracotta border-t-transparent rounded-full animate-spin mx-auto" />
+        <p className="text-xs text-espresso/70 font-medium">Loading Kitchen Companion workspace for {kitchen.name}...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 pb-12 text-espresso">
       {/* 0. GUIDED 3-MINUTE HACKATHON DEMO BAR (PART J) */}
@@ -196,7 +205,7 @@ export const KitchenCompanion: React.FC<KitchenCompanionProps> = ({
             <span className="text-[10px] text-espresso/60 uppercase font-semibold block">Service Status</span>
             <span className="font-serif font-bold text-sage text-sm flex items-center gap-1.5 justify-end">
               <span className="w-2 h-2 rounded-full bg-sage animate-ping" />
-              Active & Controlled
+              Active &amp; Controlled
             </span>
           </div>
         </div>
@@ -217,7 +226,7 @@ export const KitchenCompanion: React.FC<KitchenCompanionProps> = ({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {summary?.attention_items.slice(0, 3).map((item) => (
+          {(summary?.attention_items || []).slice(0, 3).map((item) => (
             <div
               key={item.id}
               onClick={() => handleAttentionAction(item.action_type)}
@@ -369,7 +378,7 @@ export const KitchenCompanion: React.FC<KitchenCompanionProps> = ({
                 Primary Kitchen Intelligence Recommendation
               </span>
               <h3 className="font-serif text-lg font-bold text-espresso">
-                {summary?.ai_recommendation.title || 'Optimal Dinner Rebalance Recommendation'}
+                {summary?.ai_recommendation?.title || 'Optimal Dinner Rebalance Recommendation'}
               </h3>
             </div>
           </div>
@@ -386,7 +395,7 @@ export const KitchenCompanion: React.FC<KitchenCompanionProps> = ({
               What To Do
             </span>
             <p className="text-espresso font-medium leading-relaxed">
-              {summary?.ai_recommendation.what_to_do}
+              {summary?.ai_recommendation?.what_to_do || 'Hold excess hot prep, activate cold strawberry coulis reserve, and open rescue combos.'}
             </p>
           </div>
 
@@ -395,7 +404,7 @@ export const KitchenCompanion: React.FC<KitchenCompanionProps> = ({
               Why It Helps
             </span>
             <p className="text-espresso font-medium leading-relaxed">
-              {summary?.ai_recommendation.why_it_helps}
+              {summary?.ai_recommendation?.why_it_helps || 'Prevents overproduction while preserving menu integrity during weather-driven guest shifts.'}
             </p>
           </div>
 
@@ -404,7 +413,7 @@ export const KitchenCompanion: React.FC<KitchenCompanionProps> = ({
               What Is Required
             </span>
             <p className="text-espresso font-medium leading-relaxed">
-              {summary?.ai_recommendation.what_is_required}
+              {summary?.ai_recommendation?.what_is_required || 'Chef approval required to commit altered portion targets to prep sheets.'}
             </p>
           </div>
 
@@ -413,7 +422,7 @@ export const KitchenCompanion: React.FC<KitchenCompanionProps> = ({
               Remaining Uncertainty
             </span>
             <p className="text-espresso font-medium leading-relaxed">
-              {summary?.ai_recommendation.what_is_uncertain}
+              {summary?.ai_recommendation?.what_is_uncertain || 'Walk-in guest arrivals between 18:30 and 20:00 remain subject to Poisson arrival variance.'}
             </p>
           </div>
         </div>
