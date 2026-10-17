@@ -1,6 +1,6 @@
 from enum import Enum
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 class KitchenType(str, Enum):
     RESTAURANT_CAFE = "restaurant_cafe"
@@ -290,7 +290,15 @@ class SafetyRuleCheck(BaseModel):
     observed_value: str
     threshold: str
     message: str
+    reason: Optional[str] = None
     critical_for_safety: bool = True
+
+    @model_validator(mode="before")
+    @classmethod
+    def set_reason_fallback(cls, data: Any) -> Any:
+        if isinstance(data, dict) and "reason" not in data:
+            data["reason"] = data.get("message", "")
+        return data
 
 class PreparedFoodBatch(BaseModel):
     id: str
@@ -323,22 +331,82 @@ class PreparedFoodBatch(BaseModel):
     is_demo: bool = True
     created_at: Optional[str] = None
 
+    # Frontend UI compatibility fields
+    safety_decision: Optional[str] = None
+    current_status: Optional[str] = None
+    holding_temp_c: Optional[float] = None
+    customer_contact: Optional[bool] = None
+    staff_controlled: Optional[bool] = None
+    buffet_exposure_hours: Optional[float] = None
+    authorized_staff: Optional[str] = None
+    allergen_profile: Optional[List[str]] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def populate_compatibility_fields(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if "safety_decision" not in data or data["safety_decision"] is None:
+                ed = data.get("eligibility_decision", "ELIGIBLE")
+                if hasattr(ed, "value"):
+                    ed = ed.value
+                data["safety_decision"] = "PASS_ELIGIBLE" if ed == "ELIGIBLE" else ("NEEDS_STAFF_REVIEW" if ed == "NEEDS_STAFF_REVIEW" else "INELIGIBLE_DISPOSE")
+            if "current_status" not in data or data["current_status"] is None:
+                st = data.get("status", "safe_holding")
+                if hasattr(st, "value"):
+                    st = st.value
+                data["current_status"] = str(st)
+            if "holding_temp_c" not in data or data["holding_temp_c"] is None:
+                data["holding_temp_c"] = data.get("holding_temperature_c", 65.0)
+            if "customer_contact" not in data:
+                data["customer_contact"] = data.get("served_to_customer", False)
+            if "staff_controlled" not in data:
+                data["staff_controlled"] = data.get("continuously_controlled", True)
+            if "buffet_exposure_hours" not in data:
+                data["buffet_exposure_hours"] = data.get("holding_duration_hours", 0.0)
+            if "authorized_staff" not in data:
+                data["authorized_staff"] = "Head Chef"
+            if "allergen_profile" not in data:
+                data["allergen_profile"] = data.get("allergens", [])
+        return data
+
 class PreparedFoodIntakeRequest(BaseModel):
-    kitchen_id: str
+    kitchen_id: Optional[str] = "kitchen_restaurant_verde"
     dish_name: str
     recipe_id: Optional[str] = None
-    portions_remaining: int
-    prepared_at: str
-    service_period: str
+    portions_remaining: int = 1
+    prepared_at: str = "12:00"
+    service_period: str = "dinner"
     served_to_customer: bool = False
     buffet_exposed: bool = False
     continuously_controlled: bool = True
-    holding_temperature_c: float
-    holding_duration_hours: float
-    safe_use_cutoff: str
+    holding_temperature_c: float = 65.0
+    holding_duration_hours: float = 1.0
+    safe_use_cutoff: str = "21:00"
     allergens: List[str] = []
-    dietary_tags: List[str] = []
+    dietary_tags: List[DietaryTag] = []
     notes: Optional[str] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_aliases(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if "portions" in data and "portions_remaining" not in data:
+                data["portions_remaining"] = data["portions"]
+            if "preparation_time" in data and "prepared_at" not in data:
+                data["prepared_at"] = data["preparation_time"]
+            if "customer_contact" in data and "served_to_customer" not in data:
+                data["served_to_customer"] = data["customer_contact"]
+            if "holding_temp_c" in data and "holding_temperature_c" not in data:
+                data["holding_temperature_c"] = data["holding_temp_c"]
+            if "staff_controlled" in data and "continuously_controlled" not in data:
+                data["continuously_controlled"] = data["staff_controlled"]
+            if "allergen_profile" in data and "allergens" not in data:
+                data["allergens"] = data["allergen_profile"]
+            if "handling_notes" in data and "notes" not in data:
+                data["notes"] = data["handling_notes"]
+            if "buffet_exposure_hours" in data and "holding_duration_hours" not in data:
+                data["holding_duration_hours"] = data["buffet_exposure_hours"]
+        return data
 
 class WalkinIntervalForecast(BaseModel):
     time_slot: str  # e.g., "12:30 - 13:00"
