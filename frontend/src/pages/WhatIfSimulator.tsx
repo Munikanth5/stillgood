@@ -260,79 +260,120 @@ export const WhatIfSimulator: React.FC<WhatIfSimulatorProps> = ({
             Kitchen Dial Controls
           </h3>
 
-          {/* Slider 1: Expected Meals / Diners */}
+          {/* Input 1: Expected Meals / Covers (No slider) */}
           <div className="space-y-2">
-            <div className="flex justify-between text-xs">
+            <div className="flex justify-between items-center text-xs">
               <div>
-                <span className="font-semibold text-ink block">
-                  {isRestaurant ? 'Total Expected Diners' : 'Expected Guests / Attendance'}
+                <span className="font-semibold text-espresso block">
+                  {isRestaurant ? 'Expected Dinner Covers' : 'Expected Meal Headcount'}
                 </span>
-                <span className="text-[10px] text-ink-muted">
+                <span className="text-[10px] text-espresso/60">
                   {isRestaurant ? 'Table bookings plus bar walk-ins' : 'Registered badge attendance'}
                 </span>
               </div>
-              <span className="font-serif font-bold text-forest-800 text-sm tabular-nums">
-                {expectedMeals} {isRestaurant ? 'covers' : 'meals'}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setExpectedMeals(Math.max(minMeals, expectedMeals - (isRestaurant ? 5 : 10)))}
+                  className="w-7 h-7 rounded-lg border border-subtle bg-white text-espresso hover:bg-oat text-xs font-bold transition flex items-center justify-center"
+                >
+                  -
+                </button>
+                <input
+                  type="number"
+                  min={minMeals}
+                  max={maxMeals}
+                  step={isRestaurant ? 5 : 10}
+                  value={expectedMeals}
+                  onChange={(e) => setExpectedMeals(Math.max(minMeals, Math.min(maxMeals, parseInt(e.target.value) || minMeals)))}
+                  className="w-20 px-2 py-1 text-center font-serif font-bold text-espresso text-sm border border-subtle rounded-lg bg-white"
+                />
+                <button
+                  type="button"
+                  onClick={() => setExpectedMeals(Math.min(maxMeals, expectedMeals + (isRestaurant ? 5 : 10)))}
+                  className="w-7 h-7 rounded-lg border border-subtle bg-white text-espresso hover:bg-oat text-xs font-bold transition flex items-center justify-center"
+                >
+                  +
+                </button>
+              </div>
             </div>
-            <input
-              type="range"
-              min={minMeals}
-              max={maxMeals}
-              step={isRestaurant ? 5 : 10}
-              value={expectedMeals}
-              onChange={(e) => setExpectedMeals(parseInt(e.target.value))}
-              className="w-full accent-forest-700 cursor-pointer"
-            />
-            <div className="flex justify-between text-[10px] text-ink-muted">
-              <span>{minMeals} min</span>
+            <div className="flex justify-between text-[10px] text-espresso/60">
+              <span>Min: {minMeals}</span>
               <span>Baseline: {baselineMeals}</span>
-              <span>{maxMeals} max</span>
+              <span>Max: {maxMeals}</span>
             </div>
           </div>
 
-          {/* Slider 2: Safety Buffer % */}
+          {/* Input 2: Safety Buffer % (No slider) */}
           <div className="space-y-2">
-            <div className="flex justify-between text-xs">
+            <div className="flex justify-between items-center text-xs">
               <div>
-                <span className="font-semibold text-ink block">Safety Buffer Policy</span>
-                <span className="text-[10px] text-ink-muted">Held in raw cold reserve in cooler</span>
+                <span className="font-semibold text-espresso block">Safety Buffer Policy</span>
+                <span className="text-[10px] text-espresso/60">Held in raw cold reserve in cooler</span>
               </div>
-              <span className="font-serif font-bold text-forest-800 text-sm tabular-nums">
-                +{bufferPct}% (+{Math.round(expectedMeals * (bufferPct / 100))} {isRestaurant ? 'covers' : 'meals'})
-              </span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setBufferPct(Math.max(0, bufferPct - 1))}
+                  className="w-7 h-7 rounded-lg border border-subtle bg-white text-espresso hover:bg-oat text-xs font-bold transition flex items-center justify-center"
+                >
+                  -
+                </button>
+                <div className="flex items-center">
+                  <input
+                    type="number"
+                    min={0}
+                    max={15}
+                    value={bufferPct}
+                    onChange={(e) => setBufferPct(Math.max(0, Math.min(15, parseInt(e.target.value) || 0)))}
+                    className="w-14 px-2 py-1 text-center font-serif font-bold text-espresso text-sm border border-subtle rounded-lg bg-white"
+                  />
+                  <span className="ml-1 text-xs text-espresso/70">%</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setBufferPct(Math.min(15, bufferPct + 1))}
+                  className="w-7 h-7 rounded-lg border border-subtle bg-white text-espresso hover:bg-oat text-xs font-bold transition flex items-center justify-center"
+                >
+                  +
+                </button>
+              </div>
             </div>
-            <input
-              type="range"
-              min={0}
-              max={15}
-              step={1}
-              value={bufferPct}
-              onChange={(e) => setBufferPct(parseInt(e.target.value))}
-              className="w-full accent-forest-700 cursor-pointer"
-            />
           </div>
 
-          {/* Slider 3: Minimum Vegetarian Requirement */}
+          {/* Input 3: Minimum Vegetarian Requirement (No slider) */}
           <div className="space-y-2">
-            <div className="flex justify-between text-xs">
+            <div className="flex justify-between items-center text-xs">
               <div>
-                <span className="font-semibold text-ink block">Minimum Vegetarian Diners</span>
-                <span className="text-[10px] text-ink-muted">Guaranteed dietary portions</span>
+                <span className="font-semibold text-espresso block">Minimum Vegetarian Diners</span>
+                <span className="text-[10px] text-espresso/60">Guaranteed dietary portions</span>
               </div>
-              <span className="font-serif font-bold text-forest-800 text-sm tabular-nums">
-                {minVegMeals} portions
-              </span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setMinVegMeals(Math.max(isRestaurant ? 10 : 50, minVegMeals - (isRestaurant ? 5 : 10)))}
+                  className="w-7 h-7 rounded-lg border border-subtle bg-white text-espresso hover:bg-oat text-xs font-bold transition flex items-center justify-center"
+                >
+                  -
+                </button>
+                <input
+                  type="number"
+                  min={isRestaurant ? 10 : 50}
+                  max={isRestaurant ? 100 : 300}
+                  step={isRestaurant ? 5 : 10}
+                  value={minVegMeals}
+                  onChange={(e) => setMinVegMeals(Math.max(0, parseInt(e.target.value) || 0))}
+                  className="w-16 px-2 py-1 text-center font-serif font-bold text-espresso text-sm border border-subtle rounded-lg bg-white"
+                />
+                <button
+                  type="button"
+                  onClick={() => setMinVegMeals(Math.min(isRestaurant ? 100 : 300, minVegMeals + (isRestaurant ? 5 : 10)))}
+                  className="w-7 h-7 rounded-lg border border-subtle bg-white text-espresso hover:bg-oat text-xs font-bold transition flex items-center justify-center"
+                >
+                  +
+                </button>
+              </div>
             </div>
-            <input
-              type="range"
-              min={isRestaurant ? 10 : 50}
-              max={isRestaurant ? 100 : 300}
-              step={isRestaurant ? 5 : 10}
-              value={minVegMeals}
-              onChange={(e) => setMinVegMeals(parseInt(e.target.value))}
-              className="w-full accent-forest-700 cursor-pointer"
-            />
           </div>
 
           {/* Toggle 1: Supplier Delayed */}

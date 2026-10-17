@@ -165,15 +165,15 @@ export const CreateMealOffersModal: React.FC<CreateMealOffersModalProps> = ({
               <div className="lg:col-span-7 space-y-4">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold uppercase tracking-wider text-espresso">
-                    Available Meal Offers ({combos.length})
+                    Verified Meal Offers (Max 3)
                   </span>
                   <span className="text-[11px] text-espresso/60">
-                    Click to inspect pricing & guest preview
+                    Select an offer to review discount bands
                   </span>
                 </div>
 
                 <div className="space-y-3">
-                  {combos.map((combo) => {
+                  {combos.slice(0, 3).map((combo) => {
                     const isSelected = selectedCombo?.combo_id === combo.combo_id;
                     const recommendedBand = combo.price_options.find((b) => b.recommended) || combo.price_options[0];
                     return (

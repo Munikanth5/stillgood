@@ -23,23 +23,18 @@ import {
   resetDemoState,
   fetchHealth
 } from './services/api';
-import { Header } from './components/Header';
-import { Navigation, TabKey } from './components/Navigation';
+import { Header, MainNavView } from './components/Header';
 import { EvidenceReceiptModal } from './components/EvidenceReceiptModal';
 import { ApprovalModal } from './components/ApprovalModal';
+import { PlanFoodFlowModal } from './components/PlanFoodFlowModal';
+import { PlanComparison } from './pages/PlanComparison';
 
 // Pages
 import { KitchenCompanion } from './pages/KitchenCompanion';
-import { LivingDashboard } from './pages/LivingDashboard';
-import { TomorrowPlan } from './pages/TomorrowPlan';
-import { AIAssistant } from './pages/AIAssistant';
-import { WhatIfSimulator } from './pages/WhatIfSimulator';
-import { PlanComparison } from './pages/PlanComparison';
-import { AIRescueStudio } from './pages/AIRescueStudio';
-import { InventoryIntelligence } from './pages/InventoryIntelligence';
 import { ActualOutcomes } from './pages/ActualOutcomes';
 import { ImpactDashboard } from './pages/ImpactDashboard';
 import { SettingsData } from './pages/SettingsData';
+import { GitCompare, X } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [kitchens, setKitchens] = useState<KitchenProfile[]>([]);
@@ -47,7 +42,9 @@ export const App: React.FC = () => {
   const [inventory, setInventory] = useState<InventoryBatch[]>([]);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [activeTab, setActiveTab] = useState<TabKey>('companion');
+
+  // Directive 2: Single Kitchen Companion home screen with lightweight secondary navigation for History and Settings
+  const [activeView, setActiveView] = useState<MainNavView>('home');
 
   const [scenario, setScenario] = useState<ParsedScenario | null>(null);
   const [plans, setPlans] = useState<{
@@ -64,13 +61,16 @@ export const App: React.FC = () => {
 
   const [activePlan, setActivePlan] = useState<PlanEvaluation | null>(null);
   const [evidenceReceipt, setEvidenceReceipt] = useState<EvidenceReceipt | null>(null);
+
+  // Modals
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
   const [isApprovalOpen, setIsApprovalOpen] = useState(false);
   const [planToApprove, setPlanToApprove] = useState<PlanEvaluation | null>(null);
+  const [isPlanFlowOpen, setIsPlanFlowOpen] = useState(false);
+  const [isCompareOpen, setIsCompareOpen] = useState(false);
 
   const [outcomes, setOutcomes] = useState<ActualOutcomeLog[]>([]);
   const [impactMetrics, setImpactMetrics] = useState<ImpactDashboardMetrics | null>(null);
-  const [aiStatus, setAiStatus] = useState<{ is_live_gemini: boolean; model: string } | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Initialize application data
@@ -81,22 +81,18 @@ export const App: React.FC = () => {
   const initApp = async () => {
     setLoading(true);
     try {
-      // 1. Health & AI status
-      const health = await fetchHealth();
-      setAiStatus(health.ai_integration);
-
-      // 2. Kitchens list
+      // 1. Kitchens list
       const kList = await fetchKitchens();
       setKitchens(kList);
-      const defaultKitchen = kList.find((k) => k.id === 'kitchen_corporate_apex') || kList[0];
+      const defaultKitchen = kList.find((k) => k.id === 'kitchen_restaurant_verde') || kList[0];
       setCurrentKitchen(defaultKitchen);
 
-      // 3. Load kitchen data
+      // 2. Load kitchen data
       await loadKitchenData(defaultKitchen.id);
 
-      // 4. Preload Hackathon WOW scenario so the judge can immediately see a ready decision twin!
+      // 3. Preload restaurant scenario (Osteria Verde)
       const defaultScenario = await interpretDisruption(
-        'Tomorrow attendance has dropped from 500 to 350. The paneer supplier cannot deliver before lunch. Keep at least 120 vegetarian meals and prioritize eligible spinach if feasible.',
+        'Rainstorm alert: 40 dinner reservations cancelled (70 confirmed bookings remaining + 35 walk-ins). Supplier Country Fresh Dairy delayed (no heavy cream before dinner). At-risk fresh strawberries (8 kg) need rescue.',
         defaultKitchen.id
       );
       setScenario(defaultScenario);
@@ -165,11 +161,7 @@ export const App: React.FC = () => {
   const handleResetDemo = async () => {
     await resetDemoState();
     await initApp();
-    alert('Demo successfully reset to initial verified state!');
-  };
-
-  const handleTriggerFixPlan = () => {
-    setActiveTab('comparison');
+    alert('Kitchen demo data reset to verified initial state.');
   };
 
   const handleApprovePlan = async (
@@ -208,7 +200,7 @@ export const App: React.FC = () => {
         <div className="text-center space-y-4">
           <div className="w-12 h-12 border-4 border-terracotta border-t-transparent rounded-full animate-spin mx-auto" />
           <h2 className="font-serif text-xl font-bold text-espresso">STILLGOOD Kitchen Decision Twin</h2>
-          <p className="text-xs text-espresso/60">Loading verified kitchen records & deterministic twin engine...</p>
+          <p className="text-xs text-espresso/60">Opening kitchen workspace...</p>
         </div>
       </div>
     );
@@ -216,142 +208,96 @@ export const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-vanilla text-espresso flex flex-col font-sans">
-      {/* Header */}
+      {/* Header with Brand, Kitchen Switcher, Secondary Nav & "Plan My Food" */}
       <Header
         kitchens={kitchens}
         currentKitchen={currentKitchen}
+        activeView={activeView}
+        onSelectView={setActiveView}
         onSelectKitchen={handleSelectKitchen}
-        onResetDemo={handleResetDemo}
-        onTriggerFixPlan={handleTriggerFixPlan}
-        aiStatus={aiStatus}
+        onPlanFood={() => setIsPlanFlowOpen(true)}
       />
 
-      {/* Navigation */}
-      <Navigation
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        hasPendingPlan={Boolean(plans.plan_c)}
-      />
-
-      {/* Main Content View */}
+      {/* Main Workspace (No horizontal tab maze - Directive 2) */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {activeTab === 'companion' && currentKitchen && (
+        {/* VIEW 1: HOME WORKSPACE (Single Kitchen Companion Screen - Directive 2 & 3) */}
+        {activeView === 'home' && currentKitchen && (
           <KitchenCompanion
             kitchen={currentKitchen}
             activePlan={activePlan}
+            plans={plans}
+            evidenceReceipt={evidenceReceipt}
             onViewReceipt={() => setIsReceiptOpen(true)}
             onOpenApproval={(p) => {
               setPlanToApprove(p);
               setIsApprovalOpen(true);
             }}
-            onNavigateToTab={(tab) => setActiveTab(tab)}
+            onOpenCompare={() => setIsCompareOpen(true)}
           />
         )}
 
-        {activeTab === 'today' && currentKitchen && (
-          <LivingDashboard
-            kitchen={currentKitchen}
-            onNavigateToAssistant={() => setActiveTab('assistant')}
-            onNavigateToComparison={() => setActiveTab('comparison')}
-            onNavigateToInventory={() => setActiveTab('inventory')}
-            onNavigateToImpact={() => setActiveTab('impact')}
-            onViewReceipt={() => setIsReceiptOpen(true)}
-            activePlan={activePlan}
-          />
+        {/* VIEW 2: SERVICE HISTORY & AUDIT LOGS (Lightweight secondary view - Directive 2) */}
+        {activeView === 'history' && currentKitchen && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between pb-2 border-b border-subtle">
+              <div>
+                <h2 className="font-serif text-2xl font-bold text-espresso">
+                  Service History &amp; Impact
+                </h2>
+                <p className="text-xs text-espresso/70">
+                  Audit log of service outcomes, approved plans, and measured waste reduction for {currentKitchen.name}
+                </p>
+              </div>
+              <button
+                onClick={() => setActiveView('home')}
+                className="px-4 py-2 bg-espresso text-vanilla text-xs font-semibold rounded-xl hover:bg-cocoa transition"
+              >
+                Back to Kitchen
+              </button>
+            </div>
+
+            <ImpactDashboard
+              metrics={impactMetrics}
+              outcomes={outcomes}
+            />
+
+            <ActualOutcomes
+              kitchen={currentKitchen}
+              outcomes={outcomes}
+              onOutcomeLogged={(newLog) => setOutcomes([newLog, ...outcomes])}
+            />
+          </div>
         )}
 
-        {activeTab === 'tomorrow' && currentKitchen && (
-          <TomorrowPlan
-            kitchen={currentKitchen}
-            plan={activePlan || plans.plan_c}
-            onOpenReceipt={() => setIsReceiptOpen(true)}
-            onNavigateToSimulator={() => setActiveTab('simulator')}
-          />
-        )}
+        {/* VIEW 3: SETTINGS & DATA (Lightweight secondary view - Directive 2) */}
+        {activeView === 'settings' && currentKitchen && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between pb-2 border-b border-subtle">
+              <div>
+                <h2 className="font-serif text-2xl font-bold text-espresso">
+                  Kitchen Profile &amp; Inventory Settings
+                </h2>
+                <p className="text-xs text-espresso/70">
+                  Manage recipe catalog, suppliers, and operational parameters for {currentKitchen.name}
+                </p>
+              </div>
+              <button
+                onClick={() => setActiveView('home')}
+                className="px-4 py-2 bg-espresso text-vanilla text-xs font-semibold rounded-xl hover:bg-cocoa transition"
+              >
+                Back to Kitchen
+              </button>
+            </div>
 
-        {activeTab === 'assistant' && currentKitchen && (
-          <AIAssistant
-            kitchen={currentKitchen}
-            onScenarioParsed={(s) => setScenario(s)}
-            onNavigateToComparison={() => setActiveTab('comparison')}
-          />
-        )}
-
-        {activeTab === 'simulator' && currentKitchen && scenario && (
-          <WhatIfSimulator
-            kitchen={currentKitchen}
-            initialScenario={scenario}
-            onPlanGenerated={(data) => {
-              setPlans({
-                plan_a: data.plans.plan_a,
-                plan_b: data.plans.plan_b,
-                plan_c: data.plans.plan_c,
-                rejected_candidates: data.plans.rejected_candidates
-              });
-              setEvidenceReceipt(data.evidence_receipt);
-            }}
-            onNavigateToComparison={() => setActiveTab('comparison')}
-          />
-        )}
-
-        {activeTab === 'comparison' && (
-          <PlanComparison
-            planA={plans.plan_a}
-            planB={plans.plan_b}
-            planC={plans.plan_c}
-            rejectedCandidates={plans.rejected_candidates}
-            onOpenReceipt={() => setIsReceiptOpen(true)}
-            onOpenApproval={(p) => {
-              setPlanToApprove(p);
-              setIsApprovalOpen(true);
-            }}
-          />
-        )}
-
-        {activeTab === 'rescue' && currentKitchen && (
-          <AIRescueStudio
-            kitchen={currentKitchen}
-            planC={plans.plan_c}
-            rejectedCandidates={plans.rejected_candidates}
-            onOpenReceipt={() => setIsReceiptOpen(true)}
-            onOpenApproval={(p) => {
-              setPlanToApprove(p);
-              setIsApprovalOpen(true);
-            }}
-          />
-        )}
-
-        {activeTab === 'inventory' && currentKitchen && (
-          <InventoryIntelligence
-            kitchen={currentKitchen}
-            inventory={inventory}
-          />
-        )}
-
-        {activeTab === 'outcomes' && currentKitchen && (
-          <ActualOutcomes
-            kitchen={currentKitchen}
-            outcomes={outcomes}
-            onOutcomeLogged={(newLog) => setOutcomes([newLog, ...outcomes])}
-          />
-        )}
-
-        {activeTab === 'impact' && (
-          <ImpactDashboard
-            metrics={impactMetrics}
-            outcomes={outcomes}
-          />
-        )}
-
-        {activeTab === 'settings' && currentKitchen && (
-          <SettingsData
-            kitchen={currentKitchen}
-            kitchens={kitchens}
-            recipes={recipes}
-            suppliers={suppliers}
-            onSelectKitchen={handleSelectKitchen}
-            onResetDemo={handleResetDemo}
-          />
+            <SettingsData
+              kitchen={currentKitchen}
+              kitchens={kitchens}
+              recipes={recipes}
+              suppliers={suppliers}
+              onSelectKitchen={handleSelectKitchen}
+              onResetDemo={handleResetDemo}
+            />
+          </div>
         )}
       </main>
 
@@ -359,16 +305,80 @@ export const App: React.FC = () => {
       <footer className="bg-oat border-t border-subtle py-6 text-xs text-espresso/70">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <span className="font-serif font-bold text-espresso">STILLGOOD 3.0</span>
-            <span>• Google AI Builder Cup 2026 (Sustainability & Social Impact)</span>
+            <span className="font-serif font-bold text-espresso">STILLGOOD</span>
+            <span>• No-Meal-Left-Behind AI Kitchen Decision Twin</span>
           </div>
           <div className="text-[11px] font-mono text-espresso/60">
-            Understand &rarr; Forecast &rarr; Simulate &rarr; Replan &rarr; Validate &rarr; Explain &rarr; Approve &rarr; Measure &rarr; Learn
+            Responsible Hospitality AI • Google Cloud Architecture
           </div>
         </div>
       </footer>
 
-      {/* Evidence Receipt Modal */}
+      {/* 3-Step Plan Food Modal Flow (Directive 5) */}
+      {currentKitchen && (
+        <PlanFoodFlowModal
+          isOpen={isPlanFlowOpen}
+          onClose={() => setIsPlanFlowOpen(false)}
+          kitchen={currentKitchen}
+          onPlanApproved={(p) => {
+            setPlanToApprove(p);
+            setIsApprovalOpen(true);
+          }}
+          onOpenCompare={(plansData) => {
+            setPlans(plansData);
+            setIsCompareOpen(true);
+          }}
+          onOpenReceipt={(receipt) => {
+            setEvidenceReceipt(receipt);
+            setIsReceiptOpen(true);
+          }}
+        />
+      )}
+
+      {/* Modal: Compare Other Options (Directive 5 & 10) */}
+      {isCompareOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-cocoa/60 backdrop-blur-sm overflow-y-auto">
+          <div className="relative w-full max-w-5xl bg-vanilla rounded-3xl border border-subtle shadow-2xl overflow-hidden my-auto max-h-[90vh] flex flex-col">
+            <div className="bg-espresso text-vanilla px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <GitCompare className="w-5 h-5 text-saffron" />
+                <div>
+                  <h3 className="font-serif text-lg font-bold text-white">Compare Alternative Plans</h3>
+                  <p className="text-xs text-vanilla/70">
+                    Review Plan A (Wasteful Baseline) vs Plan B (Blind Cut) vs Plan C (Balanced Decision Twin)
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsCompareOpen(false)}
+                className="p-1.5 hover:bg-white/10 rounded-xl text-white transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto flex-1 font-sans text-espresso">
+              <PlanComparison
+                planA={plans.plan_a}
+                planB={plans.plan_b}
+                planC={plans.plan_c}
+                rejectedCandidates={plans.rejected_candidates}
+                onOpenReceipt={() => {
+                  setIsCompareOpen(false);
+                  setIsReceiptOpen(true);
+                }}
+                onOpenApproval={(p) => {
+                  setIsCompareOpen(false);
+                  setPlanToApprove(p);
+                  setIsApprovalOpen(true);
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Evidence Receipt Modal ("Why this works" - Directive 5 & 10) */}
       <EvidenceReceiptModal
         receipt={evidenceReceipt}
         isOpen={isReceiptOpen}
@@ -384,7 +394,7 @@ export const App: React.FC = () => {
       {/* Manager Approval Modal */}
       <ApprovalModal
         plan={planToApprove}
-        kitchenId={currentKitchen?.id || 'kitchen_corporate_apex'}
+        kitchenId={currentKitchen?.id || 'kitchen_restaurant_verde'}
         isOpen={isApprovalOpen}
         onClose={() => setIsApprovalOpen(false)}
         onSubmit={handleApprovePlan}

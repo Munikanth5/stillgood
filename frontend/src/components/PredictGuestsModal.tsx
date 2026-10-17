@@ -3,7 +3,7 @@ import { WalkinForecastResult, WalkinIntervalForecast } from '../types';
 import { fetchWalkinForecast, recordWalkinEvent } from '../services/api';
 import {
   Users, CloudRain, Sun, TrendingUp, ShieldCheck, X,
-  Plus, Check, Clock, AlertTriangle, Sparkles, ChefHat
+  Plus, Check, Clock, ChevronDown, ChevronUp, AlertCircle, ChefHat, Info
 } from 'lucide-react';
 
 interface PredictGuestsModalProps {
@@ -25,6 +25,7 @@ export const PredictGuestsModal: React.FC<PredictGuestsModalProps> = ({
   const [walkinPartySize, setWalkinPartySize] = useState(2);
   const [recordingSuccess, setRecordingSuccess] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -55,9 +56,8 @@ export const PredictGuestsModal: React.FC<PredictGuestsModalProps> = ({
         table_type: walkinPartySize <= 2 ? 'Deuce' : 'Standard 4-Top',
         notes: `Walk-in party of ${walkinPartySize} seated during dinner service`
       });
-      setRecordingSuccess(`Recorded walk-in party of ${walkinPartySize}!`);
-      setTimeout(() => setRecordingSuccess(null), 3000);
-      // Reload forecast to show updated recorded arrival counts
+      setRecordingSuccess(`Recorded ${walkinPartySize} guest${walkinPartySize > 1 ? 's' : ''} seated at the door.`);
+      setTimeout(() => setRecordingSuccess(null), 3500);
       await loadForecast(isRain);
     } catch (err) {
       console.error('Failed to record walk-in:', err);
@@ -70,7 +70,7 @@ export const PredictGuestsModal: React.FC<PredictGuestsModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-cocoa/60 backdrop-blur-sm overflow-y-auto">
-      <div className="relative w-full max-w-4xl bg-vanilla rounded-2xl border border-subtle shadow-2xl overflow-hidden my-auto">
+      <div className="relative w-full max-w-2xl bg-vanilla rounded-3xl border border-subtle shadow-2xl overflow-hidden my-auto">
         {/* Header */}
         <div className="bg-espresso text-vanilla px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -78,14 +78,9 @@ export const PredictGuestsModal: React.FC<PredictGuestsModalProps> = ({
               <Users className="w-5 h-5 text-saffron" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-serif text-lg font-bold text-white">Predict My Guests</h3>
-                <span className="text-[10px] bg-terracotta text-white px-2 py-0.5 rounded font-mono uppercase tracking-wider">
-                  Poisson GLM Twin
-                </span>
-              </div>
+              <h3 className="font-serif text-lg font-bold text-white">Predict Guests</h3>
               <p className="text-xs text-vanilla/70">
-                Separated reservation attendance & 30-min walk-in arrival forecasting for {kitchenName}
+                Walk-in arrivals and prep guidance for {kitchenName}
               </p>
             </div>
           </div>
@@ -98,22 +93,20 @@ export const PredictGuestsModal: React.FC<PredictGuestsModalProps> = ({
         </div>
 
         {/* Content */}
-        <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto font-sans text-espresso">
-          {/* Quick Scenario Toggles */}
-          <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-oat rounded-xl border border-subtle">
+        <div className="p-6 space-y-5 max-h-[80vh] overflow-y-auto font-sans text-espresso">
+          {/* Quick Weather Context Selector */}
+          <div className="flex items-center justify-between p-3.5 bg-oat rounded-2xl border border-subtle">
             <div>
-              <span className="text-xs font-bold text-espresso uppercase tracking-wider block">
-                Simulate Weather & Demand Context
+              <span className="text-xs font-semibold text-espresso block">Weather Context</span>
+              <span className="text-[11px] text-espresso/70">
+                Rain slows walk-in foot traffic; reservations remain stable
               </span>
-              <p className="text-xs text-espresso/70">
-                Weather directly impacts walk-in velocity while booked reservations remain resilient
-              </p>
             </div>
-
             <div className="flex items-center gap-2">
               <button
+                type="button"
                 onClick={() => setIsRain(false)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border transition ${
                   !isRain
                     ? 'bg-espresso text-vanilla border-espresso shadow-xs'
                     : 'bg-white text-espresso border-subtle hover:bg-vanilla'
@@ -122,233 +115,229 @@ export const PredictGuestsModal: React.FC<PredictGuestsModalProps> = ({
                 <Sun className="w-3.5 h-3.5 text-saffron" />
                 <span>Fair Weather</span>
               </button>
-
               <button
+                type="button"
                 onClick={() => setIsRain(true)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border transition ${
                   isRain
                     ? 'bg-terracotta text-white border-terracotta shadow-xs'
                     : 'bg-white text-espresso border-subtle hover:bg-vanilla'
                 }`}
               >
                 <CloudRain className="w-3.5 h-3.5" />
-                <span>Sudden Rainstorm (-35% Walk-ins)</span>
+                <span>Rainstorm (-35%)</span>
               </button>
             </div>
           </div>
 
           {loading ? (
-            <div className="py-12 text-center space-y-3">
+            <div className="py-12 text-center space-y-2">
               <div className="w-8 h-8 border-3 border-terracotta border-t-transparent rounded-full animate-spin mx-auto" />
-              <p className="text-xs text-espresso/60">Computing Poisson count regression & 90% confidence bands...</p>
+              <p className="text-xs text-espresso/60">Updating walk-in demand estimate...</p>
             </div>
           ) : forecast ? (
             <>
-              {/* Summary KPIs */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="p-3.5 bg-white rounded-xl border border-subtle shadow-xs">
-                  <span className="text-[10px] text-espresso/60 uppercase font-semibold block">Total Expected Covers</span>
-                  <div className="font-serif text-2xl font-bold text-cocoa mt-0.5">
-                    {forecast.total_expected_covers_today}
+              {/* Directive 7 Key Metrics:
+                  1. Walk-ins expected in next 30 minutes
+                  2. Forecast range
+                  3. Actual arrivals so far
+                  4. Practical preparation advice
+                  5. Last update time */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="p-4 bg-white rounded-2xl border border-subtle shadow-xs">
+                  <span className="text-[11px] font-semibold text-espresso/60 block">
+                    Expected in Next 30 Mins
+                  </span>
+                  <div className="font-serif text-3xl font-bold text-terracotta mt-1">
+                    {forecast.predicted_walkins_next_30m} <span className="text-sm font-sans font-normal text-espresso/70">guests</span>
                   </div>
-                  <span className="text-[11px] text-espresso/70">
-                    Range: {forecast.low_demand_scenario} – {forecast.high_demand_scenario}
+                  <span className="text-[11px] text-espresso/60 block mt-1">
+                    Range: [{forecast.walkin_prediction_interval[0]} – {forecast.walkin_prediction_interval[1]}]
                   </span>
                 </div>
 
-                <div className="p-3.5 bg-white rounded-xl border border-subtle shadow-xs">
-                  <span className="text-[10px] text-espresso/60 uppercase font-semibold block">Likely Reservations</span>
-                  <div className="font-serif text-2xl font-bold text-sage mt-0.5">
-                    {forecast.expected_reservation_attendance}
+                <div className="p-4 bg-white rounded-2xl border border-subtle shadow-xs">
+                  <span className="text-[11px] font-semibold text-espresso/60 block">
+                    Actual Arrivals Recorded
+                  </span>
+                  <div className="font-serif text-3xl font-bold text-espresso mt-1">
+                    {forecast.current_recorded_arrivals} <span className="text-sm font-sans font-normal text-espresso/70">seated</span>
                   </div>
-                  <span className="text-[11px] text-espresso/70">
-                    {forecast.confirmed_reservations} booked (86% turnup)
+                  <span className="text-[11px] text-sage font-medium block mt-1">
+                    {forecast.remaining_seating_capacity} seats available
                   </span>
                 </div>
 
-                <div className="p-3.5 bg-white rounded-xl border border-subtle shadow-xs">
-                  <span className="text-[10px] text-espresso/60 uppercase font-semibold block">Next 30m Walk-Ins</span>
-                  <div className="font-serif text-2xl font-bold text-terracotta mt-0.5">
-                    {forecast.predicted_walkins_next_30m}
-                  </div>
-                  <span className="text-[11px] text-espresso/70 font-mono">
-                    90% band: [{forecast.walkin_prediction_interval[0]} – {forecast.walkin_prediction_interval[1]}]
+                <div className="p-4 bg-white rounded-2xl border border-subtle shadow-xs">
+                  <span className="text-[11px] font-semibold text-espresso/60 block">
+                    Total Tonight's Target
                   </span>
-                </div>
-
-                <div className="p-3.5 bg-white rounded-xl border border-subtle shadow-xs">
-                  <span className="text-[10px] text-espresso/60 uppercase font-semibold block">Model Accuracy</span>
-                  <div className="font-serif text-2xl font-bold text-espresso mt-0.5">
-                    {forecast.evaluation_metrics.mean_absolute_percentage_error}
+                  <div className="font-serif text-3xl font-bold text-cocoa mt-1">
+                    {forecast.total_expected_covers_today} <span className="text-sm font-sans font-normal text-espresso/70">covers</span>
                   </div>
-                  <span className="text-[11px] text-espresso/70 font-mono">
-                    MAE: {forecast.evaluation_metrics.mean_absolute_error_covers} covers
+                  <span className="text-[11px] text-espresso/60 block mt-1">
+                    {forecast.expected_reservation_attendance} reservations attending
                   </span>
                 </div>
               </div>
 
-              {/* Kitchen Prep Guidance Banner */}
-              <div className="p-4 bg-oat rounded-xl border border-subtle flex items-start gap-3">
-                <ChefHat className="w-5 h-5 text-terracotta shrink-0 mt-0.5" />
+              {/* Practical Kitchen Preparation Advice */}
+              <div className="p-4 bg-white rounded-2xl border border-subtle shadow-xs flex items-start gap-3">
+                <div className="w-8 h-8 rounded-xl bg-terracotta/10 flex items-center justify-center shrink-0 mt-0.5">
+                  <ChefHat className="w-4 h-4 text-terracotta" />
+                </div>
                 <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-espresso uppercase tracking-wider">
-                      Chef Prep Batch Advice
-                    </span>
-                    <span className="bg-sage/15 text-sage text-[10px] font-bold px-2 py-0.5 rounded uppercase">
-                      {forecast.model_confidence} Confidence
-                    </span>
-                  </div>
-                  <p className="text-xs text-espresso/80">
+                  <span className="text-xs font-bold uppercase tracking-wider text-espresso block">
+                    Chef Practical Prep Advice
+                  </span>
+                  <p className="text-xs text-espresso leading-relaxed">
                     {forecast.extra_prep_batch_recommendation}
                   </p>
+                  <div className="flex items-center gap-2 pt-1 text-[11px] text-espresso/50">
+                    <Clock className="w-3 h-3" />
+                    <span>Last updated: {forecast.timestamp}</span>
+                  </div>
                 </div>
               </div>
 
-              {/* 30-Minute Interval Forecast Table */}
-              <div className="bg-white rounded-xl border border-subtle overflow-hidden shadow-xs">
-                <div className="px-4 py-3 bg-vanilla/60 border-b border-subtle flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-terracotta" />
-                    <span className="text-xs font-bold text-espresso uppercase tracking-wider">
-                      Service Timeline (30-Minute Windows)
-                    </span>
-                  </div>
-                  <span className="text-[11px] text-espresso/60">
-                    Poisson 90% Confidence Bounds [Lower – Upper]
+              {/* Simple Number Input to Update Actual Walk-Ins (Directive 7) */}
+              <div className="p-4 bg-oat rounded-2xl border border-subtle flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div>
+                  <span className="text-xs font-bold text-espresso block">
+                    Seat Walk-In Party At Door
                   </span>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs text-left">
-                    <thead className="bg-oat/50 text-[11px] text-espresso/70 font-semibold uppercase border-b border-subtle">
-                      <tr>
-                        <th className="px-4 py-2.5">Time Slot</th>
-                        <th className="px-4 py-2.5">Status</th>
-                        <th className="px-4 py-2.5 font-bold text-espresso">Expected Walk-Ins</th>
-                        <th className="px-4 py-2.5">90% Range</th>
-                        <th className="px-4 py-2.5">Arrival Bar</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-subtle/60">
-                      {forecast.intervals.map((slot: WalkinIntervalForecast, idx: number) => {
-                        const maxWalkins = 15;
-                        const widthPct = Math.min(100, Math.round((slot.expected_walkins / maxWalkins) * 100));
-                        return (
-                          <tr
-                            key={idx}
-                            className={`transition ${
-                              slot.is_current_slot
-                                ? 'bg-saffron/10 font-semibold'
-                                : 'hover:bg-vanilla/40'
-                            }`}
-                          >
-                            <td className="px-4 py-2 font-mono font-medium text-espresso">
-                              {slot.time_slot}
-                            </td>
-                            <td className="px-4 py-2">
-                              {slot.is_current_slot ? (
-                                <span className="bg-terracotta text-white text-[9px] font-bold px-1.5 py-0.2 rounded uppercase">
-                                  Current Window
-                                </span>
-                              ) : (
-                                <span className="text-espresso/50 text-[10px]">Upcoming</span>
-                              )}
-                            </td>
-                            <td className="px-4 py-2 font-bold text-terracotta">
-                              {slot.expected_walkins} walk-ins
-                            </td>
-                            <td className="px-4 py-2 font-mono text-espresso/70">
-                              [{slot.lower_bound_90pct} – {slot.upper_bound_90pct}]
-                            </td>
-                            <td className="px-4 py-2 w-36">
-                              <div className="h-2 w-full bg-oat rounded-full overflow-hidden flex">
-                                <div
-                                  className="h-full bg-terracotta"
-                                  style={{ width: `${widthPct}%` }}
-                                  title="Expected walk-ins"
-                                />
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Live Host Stand Walk-in Arrival Recorder */}
-              <div className="p-4 bg-vanilla rounded-xl border border-subtle flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-terracotta/15 flex items-center justify-center">
-                    <TrendingUp className="w-4 h-4 text-terracotta" />
-                  </div>
-                  <div>
-                    <span className="text-xs font-bold text-espresso block">
-                      Door Staff Quick-Check: Record Walk-In Seating
-                    </span>
-                    <span className="text-[11px] text-espresso/70">
-                      Instantly updates real-time table turnover and remaining evening demand
-                    </span>
-                  </div>
+                  <span className="text-[11px] text-espresso/70">
+                    Type or tap guest count to update table occupancy instantly
+                  </span>
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-espresso/70">Party Size:</span>
-                  <div className="flex items-center border border-subtle rounded-lg bg-white overflow-hidden">
+                  <div className="flex items-center border border-subtle rounded-xl bg-white overflow-hidden shadow-xs">
                     <button
+                      type="button"
                       onClick={() => setWalkinPartySize(Math.max(1, walkinPartySize - 1))}
-                      className="px-2.5 py-1 text-xs hover:bg-oat text-espresso transition"
+                      className="px-3 py-1.5 hover:bg-oat text-espresso font-bold text-xs transition"
                     >
                       -
                     </button>
-                    <span className="px-3 py-1 font-mono text-xs font-bold text-espresso">
-                      {walkinPartySize}
-                    </span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={20}
+                      value={walkinPartySize}
+                      onChange={(e) => setWalkinPartySize(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="w-12 text-center font-serif font-bold text-sm text-espresso bg-transparent focus:outline-none"
+                    />
                     <button
+                      type="button"
                       onClick={() => setWalkinPartySize(walkinPartySize + 1)}
-                      className="px-2.5 py-1 text-xs hover:bg-oat text-espresso transition"
+                      className="px-3 py-1.5 hover:bg-oat text-espresso font-bold text-xs transition"
                     >
                       +
                     </button>
                   </div>
 
                   <button
+                    type="button"
                     onClick={handleRecordWalkin}
                     disabled={isRecording}
-                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-terracotta hover:bg-terracotta-dark text-white text-xs font-semibold shadow-xs transition"
+                    className="px-4 py-2 bg-terracotta hover:bg-terracotta-dark text-white text-xs font-semibold rounded-xl shadow-xs transition flex items-center gap-1.5"
                   >
                     <Plus className="w-3.5 h-3.5" />
-                    <span>{isRecording ? 'Logging...' : 'Seat Walk-in'}</span>
+                    <span>{isRecording ? 'Seating...' : 'Record Seating'}</span>
                   </button>
                 </div>
               </div>
 
               {recordingSuccess && (
-                <div className="p-3 bg-sage/15 border border-sage/30 rounded-lg text-sage text-xs flex items-center gap-2">
-                  <Check className="w-4 h-4" />
-                  <span>{recordingSuccess} Real-time table capacity updated.</span>
+                <div className="p-3 bg-sage/15 border border-sage/30 rounded-xl text-sage text-xs flex items-center gap-2">
+                  <Check className="w-4 h-4 shrink-0" />
+                  <span>{recordingSuccess} Remaining table capacity updated.</span>
                 </div>
               )}
+
+              {/* Expandable Section: "How was this estimated?" (Directive 7) */}
+              <div className="pt-2 border-t border-subtle">
+                <button
+                  type="button"
+                  onClick={() => setShowDetails(!showDetails)}
+                  className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-oat text-xs font-semibold text-espresso transition"
+                >
+                  <span className="flex items-center gap-2">
+                    <Info className="w-4 h-4 text-terracotta" />
+                    <span>How was this estimated?</span>
+                  </span>
+                  {showDetails ? (
+                    <ChevronUp className="w-4 h-4 text-espresso/60" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4 text-espresso/60" />
+                  )}
+                </button>
+
+                {showDetails && (
+                  <div className="mt-3 p-4 bg-white rounded-2xl border border-subtle space-y-3 text-xs animate-in fade-in">
+                    <p className="text-espresso/80 leading-relaxed">
+                      {forecast.explanation}
+                    </p>
+
+                    <div className="grid grid-cols-2 gap-2 text-[11px] p-2.5 bg-vanilla rounded-xl border border-subtle">
+                      <div>
+                        <span className="text-espresso/60 block">Model Type:</span>
+                        <span className="font-semibold text-espresso">{forecast.evaluation_metrics.model_type}</span>
+                      </div>
+                      <div>
+                        <span className="text-espresso/60 block">Historical Backtest Error:</span>
+                        <span className="font-semibold text-espresso">
+                          MAE {forecast.evaluation_metrics.mean_absolute_error_covers} covers ({forecast.evaluation_metrics.mean_absolute_percentage_error})
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-[11px] text-left">
+                        <thead className="bg-oat/50 text-espresso/70 font-semibold uppercase border-b border-subtle">
+                          <tr>
+                            <th className="px-3 py-2">Window</th>
+                            <th className="px-3 py-2">Expected Walk-Ins</th>
+                            <th className="px-3 py-2">90% Range</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-subtle/50">
+                          {forecast.intervals.map((slot: WalkinIntervalForecast, idx: number) => (
+                            <tr key={idx} className={slot.is_current_slot ? 'bg-saffron/10 font-bold' : ''}>
+                              <td className="px-3 py-1.5 font-mono">{slot.time_slot}</td>
+                              <td className="px-3 py-1.5 text-terracotta">{slot.expected_walkins} covers</td>
+                              <td className="px-3 py-1.5 font-mono text-espresso/60">
+                                [{slot.lower_bound_90pct} – {slot.upper_bound_90pct}]
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <p className="text-[10px] text-espresso/50 italic">
+                      Notice: Walk-in arrivals are statistical projections from historical service patterns and weather indicators, not live point-of-sale data.
+                    </p>
+                  </div>
+                )}
+              </div>
             </>
           ) : null}
         </div>
 
         {/* Footer */}
-        <div className="bg-oat px-6 py-3.5 border-t border-subtle flex items-center justify-between">
-          <div className="text-[11px] text-espresso/60 flex items-center gap-1.5">
-            <ShieldCheck className="w-3.5 h-3.5 text-sage" />
-            <span>Poisson GLM with 90% confidence bounds prevents both stockout & over-prep</span>
-          </div>
+        <div className="bg-oat px-6 py-3.5 border-t border-subtle flex justify-end">
           <button
+            type="button"
             onClick={onClose}
-            className="px-4 py-2 bg-espresso hover:bg-cocoa text-vanilla text-xs font-semibold rounded-lg transition"
+            className="px-5 py-2 bg-espresso hover:bg-cocoa text-vanilla text-xs font-semibold rounded-xl transition"
           >
-            Close Forecaster
+            Done
           </button>
         </div>
       </div>
     </div>
   );
 };
+export default PredictGuestsModal;
