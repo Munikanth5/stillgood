@@ -3,9 +3,19 @@ import {
   KitchenProfile,
   ParsedScenario,
   PlanEvaluation,
-  EvidenceReceipt
+  EvidenceReceipt,
+  KitchenContext,
+  TemporaryDisruption,
+  DisruptionProposalResponse
 } from '../types';
-import { calculateReplan, interpretDisruption } from '../services/api';
+import {
+  calculateReplan,
+  interpretDisruption,
+  fetchKitchenContext,
+  extractDisruptionProposal,
+  confirmDisruption,
+  resolveDisruption
+} from '../services/api';
 import {
   CalendarCheck,
   Users,
@@ -20,7 +30,10 @@ import {
   TrendingDown,
   TrendingUp,
   ShieldCheck,
-  Clock
+  Clock,
+  Info,
+  Check,
+  RotateCcw
 } from 'lucide-react';
 
 interface PlanFoodFlowModalProps {
@@ -53,9 +66,14 @@ export const PlanFoodFlowModal: React.FC<PlanFoodFlowModalProps> = ({
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
   const [expectedMeals, setExpectedMeals] = useState<number>(isRestaurant ? 105 : 350);
   const [disruptionText, setDisruptionText] = useState<string>(initialDisruptionText);
-  const [supplierDelayed, setSupplierDelayed] = useState<boolean>(true);
-  const [prioritizeExpiring, setPrioritizeExpiring] = useState<boolean>(true);
   const [minVegPortions, setMinVegPortions] = useState<number>(isRestaurant ? 35 : 120);
+
+  // Dynamic Kitchen Context & Disruption State (PART 1)
+  const [context, setContext] = useState<KitchenContext | null>(null);
+  const [activeDisruptions, setActiveDisruptions] = useState<TemporaryDisruption[]>([]);
+  const [analyzingDisruption, setAnalyzingDisruption] = useState(false);
+  const [proposalResponse, setProposalResponse] = useState<DisruptionProposalResponse | null>(null);
+  const [confirmingStatus, setConfirmingStatus] = useState<string | null>(null);
 
   const [loading, setLoading] = useState<boolean>(false);
   const [replanData, setReplanData] = useState<{
@@ -70,32 +88,84 @@ export const PlanFoodFlowModal: React.FC<PlanFoodFlowModalProps> = ({
   } | null>(null);
 
   useEffect(() => {
+    if (isOpen) {
+      loadContext();
+    }
+  }, [isOpen, kitchen.id]);
+
+  useEffect(() => {
     if (initialDisruptionText) {
       setDisruptionText(initialDisruptionText);
       setCurrentStep(2);
     }
   }, [initialDisruptionText, isOpen]);
 
+  const loadContext = async () => {
+    try {
+      const ctx = await fetchKitchenContext(kitchen.id);
+      setContext(ctx);
+      setActiveDisruptions(ctx.active_disruptions);
+    } catch (err) {
+      console.error('Error loading kitchen context:', err);
+    }
+  };
+
+  const handleAnalyzeDisruption = async () => {
+    if (!disruptionText.trim()) return;
+    setAnalyzingDisruption(true);
+    try {
+      const prop = await extractDisruptionProposal(disruptionText.trim(), kitchen.id);
+      setProposalResponse(prop);
+    } catch (err: any) {
+      alert(`Error extracting disruption: ${err.message}`);
+    } finally {
+      setAnalyzingDisruption(false);
+    }
+  };
+
+  const handleConfirmDisruption = async (option: { stock_depleted: boolean; supplier_halted: boolean }) => {
+    if (!proposalResponse) return;
+    setConfirmingStatus('confirming');
+    try {
+      const updated = await confirmDisruption({
+        disruption_id: proposalResponse.extracted_disruption.id,
+        confirmed: true,
+        stock_depleted: option.stock_depleted,
+        supplier_halted: option.supplier_halted,
+        notes: `Confirmed by manager via Kitchen Companion planning flow.`
+      });
+      await loadContext();
+      setProposalResponse(null);
+      setConfirmingStatus('confirmed');
+      setTimeout(() => setConfirmingStatus(null), 3000);
+    } catch (err: any) {
+      alert(`Failed to confirm disruption: ${err.message}`);
+      setConfirmingStatus(null);
+    }
+  };
+
+  const handleResolveDisruption = async (disruptionId: string) => {
+    try {
+      await resolveDisruption({
+        disruption_id: disruptionId,
+        delivery_received: true,
+        stock_replenished_qty: 8.0,
+        notes: 'Delivery received and verified in stock.'
+      });
+      await loadContext();
+    } catch (err: any) {
+      alert(`Failed to resolve disruption: ${err.message}`);
+    }
+  };
+
   if (!isOpen) return null;
 
   const handleGeneratePlan = async () => {
     setLoading(true);
     try {
-      // Build natural language scenario prompt
       let fullText = disruptionText.trim();
       if (!fullText) {
-        fullText = `Target meal count is revised to ${expectedMeals} meals. `;
-        if (supplierDelayed) {
-          fullText += isRestaurant
-            ? 'The Country Fresh Dairy supplier is delayed; no heavy cream before dinner service. '
-            : 'The paneer supplier cannot deliver before lunch service. ';
-        }
-        if (prioritizeExpiring) {
-          fullText += isRestaurant
-            ? 'Prioritize using at-risk fresh strawberries in dessert reserve. '
-            : 'Prioritize using near-expiry fresh spinach batches. ';
-        }
-        fullText += `Guarantee at least ${minVegPortions} vegetarian portions.`;
+        fullText = `Target meal count is revised to ${expectedMeals} meals. Guarantee at least ${minVegPortions} vegetarian portions.`;
       }
 
       const scenario = await interpretDisruption(fullText, kitchen.id);
@@ -175,25 +245,39 @@ export const PlanFoodFlowModal: React.FC<PlanFoodFlowModalProps> = ({
           </button>
         </div>
 
-        {/* Modal Body */}
-        <div className="p-6 text-espresso font-sans">
-          {/* STEP 1: How many guests do you expect? */}
+        {/* Body Content */}
+        <div className="p-6 max-h-[75vh] overflow-y-auto">
+          {/* STEP 1: How many guests do you expect? (Directives 4 & 5: NO SLIDERS) */}
           {currentStep === 1 && (
             <div className="space-y-6">
               <div>
                 <h4 className="font-serif text-xl font-bold text-espresso">
-                  How many guests do you expect today?
+                  How many guests do you expect?
                 </h4>
                 <p className="text-xs text-espresso/70 mt-1">
-                  Enter your expected attendance or dining covers. No confusing sliders—type an exact number or tap plus/minus.
+                  Adjust expected covers for today's service.
                 </p>
               </div>
 
-              {/* Number input with - and + */}
+              {/* Number Stepper Control */}
               <div className="p-6 bg-white rounded-2xl border border-subtle shadow-xs space-y-4">
-                <span className="text-xs font-bold uppercase tracking-wider text-espresso/70 block">
-                  {isRestaurant ? 'Expected Dinner Covers' : 'Expected Meals to Serve'}
-                </span>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="text-xs font-bold uppercase tracking-wider text-espresso/70 block">
+                      Target Guests Today
+                    </label>
+                    <span className="text-xs text-espresso/60">
+                      {isRestaurant ? 'Bookings + Walk-ins' : 'Total Service Headcount'}
+                    </span>
+                  </div>
+
+                  <div className="text-right">
+                    <span className="text-xs text-espresso/50 block">Standard Baseline</span>
+                    <span className="text-xs font-mono font-bold text-espresso">
+                      {baselineMeals} covers
+                    </span>
+                  </div>
+                </div>
 
                 <div className="flex items-center justify-center gap-4 py-2">
                   <button
@@ -203,21 +287,19 @@ export const PlanFoodFlowModal: React.FC<PlanFoodFlowModalProps> = ({
                   >
                     -
                   </button>
-
                   <div className="relative">
                     <input
                       type="number"
                       min={10}
-                      max={baselineMeals * 2}
+                      max={isRestaurant ? 220 : 1000}
                       value={expectedMeals}
-                      onChange={(e) => setExpectedMeals(Math.max(1, parseInt(e.target.value) || 0))}
-                      className="w-36 text-center font-serif text-4xl font-bold text-espresso border-2 border-subtle rounded-2xl py-2 px-3 bg-vanilla focus:border-terracotta focus:outline-none"
+                      onChange={(e) => setExpectedMeals(Math.max(0, parseInt(e.target.value) || 0))}
+                      className="w-36 text-center text-3xl font-serif font-bold text-espresso bg-vanilla/40 border border-subtle rounded-xl py-2 px-3 focus:outline-none focus:ring-2 focus:ring-terracotta"
                     />
-                    <span className="text-[11px] text-espresso/60 block text-center mt-1">
-                      {isRestaurant ? 'covers' : 'meals'}
+                    <span className="absolute -bottom-4 left-0 right-0 text-[10px] text-center text-espresso/50">
+                      Type exact value
                     </span>
                   </div>
-
                   <button
                     type="button"
                     onClick={() => setExpectedMeals(expectedMeals + (isRestaurant ? 5 : 25))}
@@ -232,24 +314,24 @@ export const PlanFoodFlowModal: React.FC<PlanFoodFlowModalProps> = ({
                   <span className="text-xs text-espresso/60 mr-1">Quick Scenarios:</span>
                   <button
                     type="button"
-                    onClick={() => setExpectedMeals(Math.round(baselineMeals * 0.7))}
+                    onClick={() => setExpectedMeals(isRestaurant ? 70 : Math.round(baselineMeals * 0.7))}
                     className="px-3 py-1 text-xs rounded-lg border border-subtle bg-vanilla hover:bg-oat text-espresso transition"
                   >
-                    -30% Drop ({Math.round(baselineMeals * 0.7)})
+                    {isRestaurant ? 'Bookings Only (70)' : '-30% Drop (350)'}
                   </button>
                   <button
                     type="button"
-                    onClick={() => setExpectedMeals(baselineMeals)}
-                    className="px-3 py-1 text-xs rounded-lg border border-subtle bg-vanilla hover:bg-oat text-espresso transition"
+                    onClick={() => setExpectedMeals(isRestaurant ? 105 : baselineMeals)}
+                    className="px-3 py-1 text-xs rounded-lg border border-subtle bg-vanilla hover:bg-oat text-espresso transition font-bold"
                   >
-                    Baseline ({baselineMeals})
+                    {isRestaurant ? 'Bookings + Walk-ins (105)' : `Baseline (${baselineMeals})`}
                   </button>
                   <button
                     type="button"
                     onClick={() => setExpectedMeals(Math.round(baselineMeals * 1.15))}
                     className="px-3 py-1 text-xs rounded-lg border border-subtle bg-vanilla hover:bg-oat text-espresso transition"
                   >
-                    +15% Surge ({Math.round(baselineMeals * 1.15)})
+                    Surge (+15%)
                   </button>
                 </div>
               </div>
@@ -261,117 +343,206 @@ export const PlanFoodFlowModal: React.FC<PlanFoodFlowModalProps> = ({
                   onClick={() => setCurrentStep(2)}
                   className="px-6 py-2.5 bg-terracotta hover:bg-terracotta-dark text-white text-xs sm:text-sm font-semibold rounded-xl shadow-md transition flex items-center gap-2"
                 >
-                  <span>Next: What has changed?</span>
+                  <span>Continue to What Has Changed</span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
             </div>
           )}
 
-          {/* STEP 2: What has changed? */}
+          {/* STEP 2: What has changed? (Dynamic Kitchen Context & Gemini Disruption Lifecycle) */}
           {currentStep === 2 && (
-            <div className="space-y-6">
+            <div className="space-y-5">
               <div>
                 <h4 className="font-serif text-xl font-bold text-espresso">
-                  What has changed in your kitchen today?
+                  What has changed?
                 </h4>
                 <p className="text-xs text-espresso/70 mt-1">
-                  Tell STILLGOOD about cancellations, missing supplier deliveries, or dietary rules.
+                  Tell STILLGOOD what happened. Active disruptions and verified policies will shape your plan.
                 </p>
               </div>
 
-              <div className="space-y-4">
-                {/* Natural language disruption description */}
-                <div className="p-4 bg-white rounded-2xl border border-subtle shadow-xs space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-espresso/70 block">
-                    Describe In Plain Words (Optional)
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={disruptionText}
-                    onChange={(e) => setDisruptionText(e.target.value)}
-                    placeholder={
-                      isRestaurant
-                        ? 'e.g. 40 dinner reservations cancelled due to rain; dairy truck delayed; prioritize fresh strawberries.'
-                        : 'e.g. 150 staff working remotely tomorrow; paneer delivery delayed past lunch rush.'
-                    }
-                    className="w-full p-3 text-xs rounded-xl border border-subtle bg-vanilla text-espresso focus:outline-none focus:ring-1 focus:ring-terracotta"
-                  />
-                </div>
-
-                {/* Quick toggle chips */}
-                <div className="p-4 bg-white rounded-2xl border border-subtle shadow-xs space-y-3">
-                  <span className="text-xs font-bold uppercase tracking-wider text-espresso/70 block">
-                    Kitchen Constraints
-                  </span>
-
-                  <label className="flex items-center justify-between p-3 rounded-xl bg-vanilla/60 border border-subtle cursor-pointer hover:bg-vanilla">
+              {/* 1. Persistent Kitchen Policy & Operational Facts Banner */}
+              {context && (
+                <div className="p-3.5 bg-oat/70 rounded-2xl border border-subtle flex flex-wrap items-center justify-between gap-3 text-xs">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-sage shrink-0" />
                     <div>
-                      <span className="text-xs font-semibold text-espresso block">
-                        {isRestaurant ? 'Key Dairy Delivery Delayed' : 'Core Supplier Delayed'}
+                      <span className="font-bold text-espresso block">
+                        Persistent Policy (v{context.policy.version})
                       </span>
                       <span className="text-[11px] text-espresso/70">
-                        {isRestaurant ? 'Country Fresh Dairy cream delayed past prep cutoff' : 'Paneer delayed past lunch'}
+                        {context.policy.approved_safety_policy} • Capacity: {context.policy.capacity_meals_per_service} covers
                       </span>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={supplierDelayed}
-                      onChange={(e) => setSupplierDelayed(e.target.checked)}
-                      className="rounded text-terracotta focus:ring-terracotta"
-                    />
-                  </label>
-
-                  <label className="flex items-center justify-between p-3 rounded-xl bg-vanilla/60 border border-subtle cursor-pointer hover:bg-vanilla">
-                    <div>
-                      <span className="text-xs font-semibold text-espresso block">
-                        Prioritize At-Risk Inventory
-                      </span>
-                      <span className="text-[11px] text-espresso/70">
-                        Allocate ingredients near safe shelf-life cutoff first (FEFO)
-                      </span>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={prioritizeExpiring}
-                      onChange={(e) => setPrioritizeExpiring(e.target.checked)}
-                      className="rounded text-sage focus:ring-sage"
-                    />
-                  </label>
-
-                  <div className="p-3 rounded-xl bg-vanilla/60 border border-subtle flex items-center justify-between">
-                    <div>
-                      <span className="text-xs font-semibold text-espresso block">
-                        Guaranteed Vegetarian Meals
-                      </span>
-                      <span className="text-[11px] text-espresso/70">
-                        Minimum portions strictly protected
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setMinVegPortions(Math.max(10, minVegPortions - 5))}
-                        className="w-6 h-6 rounded border border-subtle bg-white text-xs font-bold"
-                      >
-                        -
-                      </button>
-                      <input
-                        type="number"
-                        min={0}
-                        value={minVegPortions}
-                        onChange={(e) => setMinVegPortions(parseInt(e.target.value) || 0)}
-                        className="w-14 px-1 py-0.5 text-center text-xs font-bold font-serif border border-subtle rounded bg-white"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setMinVegPortions(minVegPortions + 5)}
-                        className="w-6 h-6 rounded border border-subtle bg-white text-xs font-bold"
-                      >
-                        +
-                      </button>
                     </div>
                   </div>
+                  <div className="flex items-center gap-3 text-[11px] text-espresso/80">
+                    <span>At-Risk Stock: <strong>{context.operational_facts.at_risk_inventory_kg} kg</strong></span>
+                    <span>Reservations: <strong>{context.operational_facts.confirmed_reservations}</strong></span>
+                  </div>
+                </div>
+              )}
+
+              {/* 2. Active Confirmed Disruptions */}
+              {activeDisruptions.length > 0 && (
+                <div className="p-4 bg-vanilla rounded-2xl border border-terracotta/30 shadow-xs space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wider text-terracotta flex items-center gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5" />
+                      Active Confirmed Disruptions ({activeDisruptions.length})
+                    </span>
+                    <span className="text-[10px] text-espresso/60">Persistent across services</span>
+                  </div>
+                  <div className="divide-y divide-subtle/50 text-xs">
+                    {activeDisruptions.map((disr) => (
+                      <div key={disr.id} className="py-2.5 flex items-center justify-between gap-2">
+                        <div>
+                          <div className="font-semibold text-espresso capitalize">
+                            {disr.affected_name} — {disr.issue_type.replace('_', ' ')} ({disr.duration_days} days)
+                          </div>
+                          <div className="text-[11px] text-espresso/70">
+                            Dates: {disr.start_date} to {disr.end_date} • 86'd recipes: {disr.affected_recipe_names.join(', ')}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleResolveDisruption(disr.id)}
+                          className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-sage/10 text-sage hover:bg-sage hover:text-white border border-sage/20 transition flex items-center gap-1"
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                          <span>Resolve / Restock</span>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 3. Natural Language Disruption Input */}
+              <div className="p-4 bg-white rounded-2xl border border-subtle shadow-xs space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold uppercase tracking-wider text-espresso/70 block">
+                    Describe In Plain Words
+                  </label>
+                  <span className="text-[10px] text-espresso/50">Google Gemini Extraction</span>
+                </div>
+                <textarea
+                  rows={2}
+                  value={disruptionText}
+                  onChange={(e) => setDisruptionText(e.target.value)}
+                  placeholder={
+                    isRestaurant
+                      ? 'e.g. Strawberries are out of stock and unavailable for the next five days.'
+                      : 'e.g. 150 staff working remotely tomorrow; paneer delivery delayed past lunch rush.'
+                  }
+                  className="w-full p-3 text-xs rounded-xl border border-subtle bg-vanilla text-espresso focus:outline-none focus:ring-1 focus:ring-terracotta"
+                />
+
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-[10px] text-espresso/60">
+                    STILLGOOD requires confirmation before mutating recipes or inventory.
+                  </span>
+                  <button
+                    type="button"
+                    disabled={analyzingDisruption || !disruptionText.trim()}
+                    onClick={handleAnalyzeDisruption}
+                    className="px-3 py-1.5 bg-oat hover:bg-subtle text-espresso text-xs font-semibold rounded-xl border border-subtle transition flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    <Sparkles className={`w-3.5 h-3.5 text-saffron ${analyzingDisruption ? 'animate-spin' : ''}`} />
+                    <span>{analyzingDisruption ? 'Extracting...' : 'Verify Disruption'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* 4. Manager Confirmation Card (Extracted Proposal) */}
+              {proposalResponse && (
+                <div className="p-4 bg-vanilla border-2 border-saffron/40 rounded-2xl shadow-md space-y-3 animate-in fade-in">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-terracotta shrink-0" />
+                    <div>
+                      <span className="text-xs font-bold text-espresso uppercase tracking-wider block">
+                        Gemini Extraction • Manager Confirmation Needed
+                      </span>
+                      <p className="text-xs text-espresso/80">
+                        {proposalResponse.clarification_message}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-white/80 rounded-xl border border-subtle text-xs space-y-1">
+                    <div className="flex justify-between">
+                      <span className="text-espresso/60">Affected Ingredient:</span>
+                      <strong className="text-espresso capitalize">{proposalResponse.extracted_disruption.affected_name}</strong>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-espresso/60">Issue & Duration:</span>
+                      <strong className="text-espresso">{proposalResponse.extracted_disruption.issue_type.replace('_', ' ')} • {proposalResponse.extracted_disruption.duration_days} days</strong>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-espresso/60">Affected Recipes (to 86):</span>
+                      <strong className="text-espresso">{proposalResponse.extracted_disruption.affected_recipe_names.join(', ') || 'None identified'}</strong>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-espresso/80 italic">
+                    {proposalResponse.confirmation_prompt}
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                    <button
+                      type="button"
+                      disabled={confirmingStatus === 'confirming'}
+                      onClick={() => handleConfirmDisruption({ stock_depleted: true, supplier_halted: true })}
+                      className="p-2.5 rounded-xl bg-terracotta text-white text-xs font-semibold hover:bg-terracotta-dark transition text-left"
+                    >
+                      <span className="font-bold block">Confirm: Stock Depleted</span>
+                      <span className="text-[10px] text-white/80 block">86 all strawberry recipes across service dates</span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={confirmingStatus === 'confirming'}
+                      onClick={() => handleConfirmDisruption({ stock_depleted: false, supplier_halted: true })}
+                      className="p-2.5 rounded-xl bg-oat border border-subtle text-espresso text-xs font-semibold hover:bg-subtle transition text-left"
+                    >
+                      <span className="font-bold block">Confirm: Future Outage Only</span>
+                      <span className="text-[10px] text-espresso/70 block">Keep verified on-hand cooler batch active today</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* 5. Dietary Protection Stepper */}
+              <div className="p-4 bg-white rounded-2xl border border-subtle shadow-xs flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-semibold text-espresso block">
+                    Guaranteed Vegetarian Meals
+                  </span>
+                  <span className="text-[11px] text-espresso/70">
+                    Protected by persistent kitchen policy
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setMinVegPortions(Math.max(10, minVegPortions - 5))}
+                    className="w-7 h-7 rounded-lg border border-subtle bg-vanilla text-xs font-bold hover:bg-oat"
+                  >
+                    -
+                  </button>
+                  <input
+                    type="number"
+                    min={0}
+                    value={minVegPortions}
+                    onChange={(e) => setMinVegPortions(parseInt(e.target.value) || 0)}
+                    className="w-14 px-1 py-1 text-center text-xs font-bold font-serif border border-subtle rounded-lg bg-vanilla"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setMinVegPortions(minVegPortions + 5)}
+                    className="w-7 h-7 rounded-lg border border-subtle bg-vanilla text-xs font-bold hover:bg-oat"
+                  >
+                    +
+                  </button>
                 </div>
               </div>
 
@@ -484,50 +655,53 @@ export const PlanFoodFlowModal: React.FC<PlanFoodFlowModalProps> = ({
                 </div>
               </div>
 
-              {/* Action Buttons */}
-              <div className="space-y-3 pt-2">
-                <div className="flex items-center justify-between gap-3">
+              {/* Secondary Navigation (Why this works & Compare other options) */}
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                {replanData?.evidence_receipt && (
                   <button
                     type="button"
                     onClick={() => onOpenReceipt(replanData.evidence_receipt)}
-                    className="text-xs text-espresso/70 hover:text-espresso flex items-center gap-1.5 transition underline-offset-4 hover:underline"
+                    className="text-xs text-espresso/80 hover:text-terracotta underline flex items-center gap-1.5 transition"
                   >
                     <FileText className="w-3.5 h-3.5" />
                     <span>Why this works (Evidence Receipt)</span>
                   </button>
+                )}
 
+                {replanData?.plans && (
                   <button
                     type="button"
                     onClick={() => onOpenCompare(replanData.plans)}
-                    className="px-4 py-2 border border-subtle text-espresso text-xs font-semibold rounded-xl hover:bg-oat transition flex items-center gap-1.5"
+                    className="px-3.5 py-1.5 bg-vanilla border border-subtle rounded-xl text-xs font-semibold text-espresso hover:bg-oat transition flex items-center gap-1.5 shadow-2xs"
                   >
                     <GitCompare className="w-3.5 h-3.5 text-terracotta" />
                     <span>Compare other options</span>
                   </button>
-                </div>
+                )}
+              </div>
 
-                <div className="flex items-center justify-between pt-2 border-t border-subtle">
-                  <button
-                    type="button"
-                    onClick={() => setCurrentStep(2)}
-                    className="px-4 py-2 border border-subtle text-espresso text-xs font-semibold rounded-xl hover:bg-oat transition flex items-center gap-1.5"
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                    <span>Adjust Inputs</span>
-                  </button>
+              {/* Step 3 Footer Action Bar */}
+              <div className="flex items-center justify-between pt-4 border-t border-subtle">
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep(2)}
+                  className="px-4 py-2 border border-subtle text-espresso text-xs font-semibold rounded-xl hover:bg-oat transition flex items-center gap-1.5"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>Adjust Inputs</span>
+                </button>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onPlanApproved(activePlan);
-                      onClose();
-                    }}
-                    className="px-6 py-2.5 bg-terracotta hover:bg-terracotta-dark text-white text-xs sm:text-sm font-semibold rounded-xl shadow-md transition flex items-center gap-2"
-                  >
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>Review &amp; Approve Plan</span>
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onPlanApproved(activePlan);
+                    onClose();
+                  }}
+                  className="px-6 py-2.5 bg-terracotta hover:bg-terracotta-dark text-white text-xs sm:text-sm font-semibold rounded-xl shadow-md transition flex items-center gap-2"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Review & Approve Plan</span>
+                </button>
               </div>
             </div>
           )}
@@ -536,4 +710,3 @@ export const PlanFoodFlowModal: React.FC<PlanFoodFlowModalProps> = ({
     </div>
   );
 };
-export default PlanFoodFlowModal;

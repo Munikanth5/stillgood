@@ -4,7 +4,8 @@ import {
   ApprovalRecord, ActualOutcomeLog, ImpactDashboardMetrics,
   KitchenCompanionSummary, PreparedFoodBatch, PreparedFoodIntakeRequest,
   WalkinForecastResult, WalkinEvent, MealComboProposal,
-  MealOfferOrderRequest, MealOfferOrderResult
+  MealOfferOrderRequest, MealOfferOrderResult,
+  KitchenContext, TemporaryDisruption, DisruptionProposalResponse
 } from '../types';
 
 const API_BASE = '/api';
@@ -196,11 +197,18 @@ export async function intakePreparedFood(kitchenId: string, payload: PreparedFoo
 
 export async function fetchWalkinForecast(
   kitchenId: string,
-  params?: { rain_scenario?: boolean; lunch_or_dinner?: string }
+  params?: {
+    cancellations?: number;
+    current_walkins?: number;
+    manager_override?: number;
+    manager_override_reason?: string;
+  }
 ): Promise<WalkinForecastResult> {
   const query = new URLSearchParams();
-  if (params?.rain_scenario !== undefined) query.set('rain_scenario', String(params.rain_scenario));
-  if (params?.lunch_or_dinner) query.set('lunch_or_dinner', params.lunch_or_dinner);
+  if (params?.cancellations !== undefined) query.set('cancellations', String(params.cancellations));
+  if (params?.current_walkins !== undefined) query.set('current_walkins', String(params.current_walkins));
+  if (params?.manager_override !== undefined) query.set('manager_override', String(params.manager_override));
+  if (params?.manager_override_reason) query.set('manager_override_reason', params.manager_override_reason);
   const qStr = query.toString() ? `?${query.toString()}` : '';
   const res = await fetch(`${API_BASE}/kitchens/${kitchenId}/walkin-forecast${qStr}`);
   if (!res.ok) throw new Error('Failed to fetch walk-in forecast');
@@ -209,12 +217,20 @@ export async function fetchWalkinForecast(
 
 export async function recordWalkinEvent(
   kitchenId: string,
-  event: { party_size: number; table_type?: string; notes?: string }
+  event: { id?: string; party_size: number; event_type?: string; notes?: string }
 ): Promise<WalkinEvent> {
+  const payload = {
+    id: event.id || `EVT-MANUAL-${Date.now()}`,
+    kitchen_id: kitchenId,
+    timestamp: new Date().toISOString().substring(11, 16) + ' UTC',
+    party_size: event.party_size,
+    event_type: event.event_type || 'walkin_arrival',
+    notes: event.notes || 'Front-of-house arrival'
+  };
   const res = await fetch(`${API_BASE}/kitchens/${kitchenId}/walkin-event`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(event),
+    body: JSON.stringify(payload),
   });
   if (!res.ok) throw new Error('Failed to record walk-in arrival');
   return res.json();
@@ -257,4 +273,95 @@ export async function orderCombo(comboId: string, payload: MealOfferOrderRequest
   }
   return res.json();
 }
+
+// --- PART 1: Kitchen Context & Disruptions Lifecycle ---
+export async function fetchKitchenContext(kitchenId: string): Promise<KitchenContext> {
+  const res = await fetch(`${API_BASE}/kitchens/${kitchenId}/context`);
+  if (!res.ok) throw new Error('Failed to fetch kitchen context');
+  return res.json();
+}
+
+export async function fetchDisruptions(kitchenId: string, activeOnly: boolean = true): Promise<TemporaryDisruption[]> {
+  const res = await fetch(`${API_BASE}/kitchens/${kitchenId}/disruptions?active_only=${activeOnly}`);
+  if (!res.ok) throw new Error('Failed to fetch disruptions');
+  return res.json();
+}
+
+export async function extractDisruptionProposal(rawText: string, kitchenId: string): Promise<DisruptionProposalResponse> {
+  const res = await fetch(`${API_BASE}/disruptions/extract-proposal`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ raw_text: rawText, kitchen_id: kitchenId }),
+  });
+  if (!res.ok) throw new Error('Failed to extract disruption proposal');
+  return res.json();
+}
+
+export async function confirmDisruption(payload: {
+  disruption_id: string;
+  confirmed: boolean;
+  stock_depleted: boolean;
+  supplier_halted: boolean;
+  notes?: string;
+}): Promise<TemporaryDisruption> {
+  const res = await fetch(`${API_BASE}/disruptions/confirm`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error('Failed to confirm disruption');
+  return res.json();
+}
+
+export async function resolveDisruption(payload: {
+  disruption_id: string;
+  delivery_received: boolean;
+  stock_replenished_qty?: number;
+  notes?: string;
+}): Promise<TemporaryDisruption> {
+  const res = await fetch(`${API_BASE}/disruptions/resolve`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error('Failed to resolve disruption');
+  return res.json();
+}
+
+// --- PART 3: Operational Disposal & Donation ---
+export async function recordDisposal(kitchenId: string, payload: {
+  batch_id: string;
+  disposed_weight_kg: number;
+  disposal_reason: string;
+}): Promise<PreparedFoodBatch> {
+  const res = await fetch(`${API_BASE}/kitchens/${kitchenId}/prepared-food/dispose`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to record food disposal');
+  }
+  return res.json();
+}
+
+export async function recordDonation(kitchenId: string, payload: {
+  batch_id: string;
+  portions_donated: number;
+  partner_name?: string;
+  transport_temp_c?: number;
+}): Promise<PreparedFoodBatch> {
+  const res = await fetch(`${API_BASE}/kitchens/${kitchenId}/prepared-food/donate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to complete donation handover');
+  }
+  return res.json();
+}
+
 

@@ -381,13 +381,24 @@ export interface WalkinForecastResult {
   extra_prep_batch_recommendation: string;
   model_name: string;
   model_confidence: string;
+  data_sources_connected?: string[];
+  future_walkins_expected?: number;
+  manager_override?: number | null;
+  manager_override_reason?: string | null;
+  connector_mode?: string;
   evaluation_metrics: {
     model_type: string;
     training_window: string;
     mean_absolute_error_covers: number;
     mean_absolute_percentage_error: string;
+    mean_absolute_percentage_error_pct?: number;
     r_squared: number;
     reservation_turnup_rate: number;
+    training_samples_evaluated?: number;
+    holdout_samples_evaluated?: number;
+    holdout_mae_covers?: number;
+    holdout_mape_pct?: number;
+    zero_double_counting_guarantee?: string;
   };
   intervals: WalkinIntervalForecast[];
   explanation: string;
@@ -479,3 +490,77 @@ export interface KitchenCompanionSummary {
   active_combos_count: number;
   walkins_expected_today: number;
 }
+
+export interface KitchenPolicy {
+  version: number;
+  kitchen_id: string;
+  approved_recipes_count: number;
+  capacity_meals_per_service: number;
+  dietary_strictness: string;
+  dietary_exclusions_allowed: string[];
+  minimum_contracted_meals: number;
+  supplier_contract_rules: Array<{ supplier_id: string; rule: string; penalty?: string }>;
+  approved_safety_policy: string;
+  last_updated: string;
+}
+
+export interface KitchenOperationalFacts {
+  kitchen_id: string;
+  eligible_inventory_batches_count: number;
+  at_risk_inventory_kg: number;
+  confirmed_reservations: number;
+  current_recorded_arrivals: number;
+  active_supplier_orders_count: number;
+  prepared_meals_in_holding: number;
+  available_prep_capacity: number;
+  last_synced: string;
+}
+
+export type DisruptionStatus = 'PENDING_CONFIRMATION' | 'CONFIRMED' | 'RESOLVED' | 'REJECTED';
+
+export interface TemporaryDisruption {
+  id: string;
+  kitchen_id: string;
+  affected_entity_type: string;
+  affected_name: string;
+  issue_type: string;
+  start_date: string;
+  end_date: string;
+  duration_days: number;
+  actual_resolution_time?: string | null;
+  source_and_evidence: string;
+  confirmation_status: DisruptionStatus;
+  confirmation_needed: string;
+  confirmation_details?: {
+    stock_depleted: boolean;
+    supplier_halted: boolean;
+    notes?: string;
+  } | null;
+  created_by: string;
+  created_at: string;
+  last_updated: string;
+  affected_recipe_ids: string[];
+  affected_recipe_names: string[];
+  is_active: boolean;
+}
+
+export interface DisruptionProposalResponse {
+  extracted_disruption: TemporaryDisruption;
+  clarification_message: string;
+  confirmation_prompt: string;
+  options: Array<{
+    action: string;
+    label: string;
+    stock_depleted: boolean;
+    supplier_halted: boolean;
+  }>;
+}
+
+export interface KitchenContext {
+  kitchen: KitchenProfile;
+  policy: KitchenPolicy;
+  operational_facts: KitchenOperationalFacts;
+  active_disruptions: TemporaryDisruption[];
+  past_disruptions: TemporaryDisruption[];
+}
+

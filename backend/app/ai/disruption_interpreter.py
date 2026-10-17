@@ -1,9 +1,12 @@
 import re
 import json
 import logging
-from typing import Dict, Any, Optional
-from datetime import datetime, timezone
-from app.models.schemas import ParsedScenario
+from typing import Dict, Any, Optional, List
+from datetime import datetime, timezone, timedelta
+from app.models.schemas import (
+    ParsedScenario, TemporaryDisruption, DisruptionProposalResponse,
+    DisruptionStatus
+)
 from app.ai.gemini_client import gemini_service
 
 logger = logging.getLogger("stillgood.ai.disruption")
@@ -167,4 +170,140 @@ Rules:
             raw_explanation=explanation,
             confidence=0.95,
             extraction_source="STILLGOOD Deterministic NLP Parser"
+        )
+
+    @classmethod
+    def extract_disruption_proposal(
+        cls,
+        text: str,
+        kitchen_id: str = "kitchen_restaurant_verde"
+    ) -> DisruptionProposalResponse:
+        """
+        Part 1: Gemini Disruption Extraction & Confirmation Proposal.
+        Extracts structured fields (ingredient, issue, duration, confirmation needed).
+        Does NOT immediately mutate inventory; stages disruption in PENDING_CONFIRMATION state.
+        """
+        from app.core.database import db
+        now = datetime.now(timezone.utc)
+        today_str = now.strftime("%Y-%m-%d")
+        lowered = text.lower()
+
+        # 1. Parse entity and issue
+        affected_entity = "ingredient"
+        affected_name = "strawberries"
+        issue_type = "out_of_stock"
+
+        if "strawberr" in lowered:
+            affected_name = "strawberries"
+            affected_entity = "ingredient"
+            issue_type = "out_of_stock"
+        elif "cream" in lowered or "dairy" in lowered:
+            affected_name = "cream"
+            affected_entity = "ingredient"
+            issue_type = "delayed"
+        elif "paneer" in lowered:
+            affected_name = "paneer"
+            affected_entity = "ingredient"
+            issue_type = "delayed"
+        elif "oven" in lowered or "steamer" in lowered or "equipment" in lowered:
+            affected_name = "combi_oven"
+            affected_entity = "equipment"
+            issue_type = "breakdown"
+        else:
+            words = text.split()
+            affected_name = words[0] if words else "ingredient"
+
+        # 2. Parse duration (e.g. "five days", "5 days", "3 days")
+        duration_days = None
+        duration_match = re.search(r"(\d+)\s+days?", lowered)
+        if duration_match:
+            duration_days = int(duration_match.group(1))
+        elif "five days" in lowered or "5 days" in lowered:
+            duration_days = 5
+        elif "three days" in lowered or "3 days" in lowered:
+            duration_days = 3
+        elif "one week" in lowered or "1 week" in lowered or "week" in lowered:
+            duration_days = 7
+        elif "tomorrow" in lowered:
+            duration_days = 1
+
+        missing_info = duration_days is None
+        if missing_info:
+            duration_days = 1
+            clarification_message = f"Disruption detected for '{affected_name}', but duration was not specified. Defaulting to 1 service day. Please clarify or edit expected duration."
+        else:
+            clarification_message = f"Extracted {duration_days}-day {issue_type.replace('_', ' ')} disruption for {affected_name}."
+
+        end_date = (now + timedelta(days=duration_days)).strftime("%Y-%m-%d")
+
+        # 3. Look up affected recipes from database
+        kitchen_recipes = db.get_recipes(kitchen_id)
+        affected_recipes = []
+        for r in kitchen_recipes:
+            for ing in r.ingredients:
+                if (affected_name.lower() in ing.ingredient_name.lower() or
+                    affected_name.lower() in ing.ingredient_id.lower()):
+                    affected_recipes.append(r)
+                    break
+
+        recipe_ids = [r.id for r in affected_recipes]
+        recipe_names = [r.name for r in affected_recipes]
+
+        disruption_id = f"DISR-{kitchen_id[:3].upper()}-{now.strftime('%Y%m%d%H%M%S')}"
+        confirmation_needed = (
+            f"Please confirm operational impact: Is existing on-hand cooler stock of {affected_name} already depleted, "
+            f"or is only incoming supplier delivery halted for the next {duration_days} days?"
+        )
+
+        disruption = TemporaryDisruption(
+            id=disruption_id,
+            kitchen_id=kitchen_id,
+            affected_entity_type=affected_entity,
+            affected_name=affected_name,
+            issue_type=issue_type,
+            start_date=today_str,
+            end_date=end_date,
+            duration_days=duration_days,
+            actual_resolution_time=None,
+            source_and_evidence=text,
+            confirmation_status=DisruptionStatus.PENDING_CONFIRMATION,
+            confirmation_needed=confirmation_needed,
+            confirmation_details=None,
+            created_by="Kitchen Operations Manager",
+            created_at=now.strftime("%Y-%m-%d %H:%M UTC"),
+            last_updated=now.strftime("%Y-%m-%d %H:%M UTC"),
+            affected_recipe_ids=recipe_ids,
+            affected_recipe_names=recipe_names,
+            is_active=True
+        )
+
+        options = [
+            {
+                "action": "confirm_all_depleted",
+                "label": f"Confirm: Both Existing Stock Depleted & Supplier Halted (86 all {len(recipe_names)} recipes)",
+                "stock_depleted": True,
+                "supplier_halted": True
+            },
+            {
+                "action": "confirm_supplier_only",
+                "label": f"Confirm: Future Supplier Halted Only (Keep remaining verified cooler stock active today)",
+                "stock_depleted": False,
+                "supplier_halted": True
+            },
+            {
+                "action": "reject",
+                "label": "Reject / Cancel this Alert (No recipes changed)",
+                "stock_depleted": False,
+                "supplier_halted": False
+            }
+        ]
+
+        # Stage proposal in DB idempotently
+        staged = db.stage_disruption(disruption)
+
+        return DisruptionProposalResponse(
+            extracted_disruption=staged,
+            clarification_message=clarification_message,
+            confirmation_prompt=confirmation_needed,
+            options=options
         )

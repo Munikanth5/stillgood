@@ -6,7 +6,10 @@ from app.models.schemas import (
     KitchenProfile, InventoryBatch, Recipe, Supplier,
     DisruptionInput, ParsedScenario, PlanEvaluation,
     EvidenceReceipt, ApprovalRequest, ApprovalRecord,
-    ActualOutcomeLog, ImpactDashboardMetrics
+    ActualOutcomeLog, ImpactDashboardMetrics,
+    KitchenContext, TemporaryDisruption, DisruptionProposalResponse,
+    ConfirmDisruptionRequest, ResolveDisruptionRequest,
+    RecordDisposalRequest, RecordDonationRequest
 )
 from app.core.database import db
 from app.ai.gemini_client import gemini_service
@@ -248,15 +251,28 @@ def intake_prepared_food(kitchen_id: str, req: PreparedFoodIntakeRequest):
 
 # --- 3. Walk-in Demand Forecasting ---
 @app.get("/api/kitchens/{kitchen_id}/walkin-forecast", response_model=WalkinForecastResult)
-def get_walkin_forecast(kitchen_id: str, cancellations: int = 0, current_walkins: int = 0):
+def get_walkin_forecast(
+    kitchen_id: str,
+    cancellations: int = 0,
+    current_walkins: int = 0,
+    manager_override: Optional[int] = None,
+    manager_override_reason: Optional[str] = None
+):
     kitchen = db.get_kitchen(kitchen_id)
     if not kitchen:
         kitchen = db.get_kitchen("kitchen_restaurant_verde")
+    
+    # Check live recorded walkin arrivals in DB
+    db_walkin_count = sum(getattr(e, "party_size", 1) for e in db.get_walkin_events(kitchen_id))
+    effective_walkins = max(current_walkins, db_walkin_count)
+
     return WalkinDemandForecaster.generate_forecast(
         kitchen=kitchen,
         service_period=kitchen.default_service_period,
-        current_walkin_count=current_walkins,
-        cancellations_count=cancellations
+        current_walkin_count=effective_walkins,
+        cancellations_count=cancellations,
+        manager_override=manager_override,
+        manager_override_reason=manager_override_reason
     )
 
 @app.post("/api/kitchens/{kitchen_id}/walkin-event", response_model=WalkinEvent)
@@ -304,4 +320,48 @@ def order_combo(combo_id: str, req: MealOfferOrderRequest):
         status=result["status"],
         message=result["message"]
     )
+
+# --- 5. Dynamic Kitchen Context & Disruption Lifecycle (PART 1) ---
+@app.get("/api/kitchens/{kitchen_id}/context", response_model=KitchenContext)
+def get_kitchen_context(kitchen_id: str):
+    return db.get_kitchen_context(kitchen_id)
+
+@app.get("/api/kitchens/{kitchen_id}/disruptions", response_model=List[TemporaryDisruption])
+def get_disruptions(kitchen_id: str, active_only: bool = True):
+    return db.get_disruptions(kitchen_id, active_only=active_only)
+
+@app.post("/api/disruptions/extract-proposal", response_model=DisruptionProposalResponse)
+def extract_disruption_proposal(payload: DisruptionInput):
+    kitchen_id = payload.kitchen_id or "kitchen_restaurant_verde"
+    return DisruptionInterpreter.extract_disruption_proposal(payload.raw_text, kitchen_id)
+
+@app.post("/api/disruptions/confirm", response_model=TemporaryDisruption)
+def confirm_disruption(req: ConfirmDisruptionRequest):
+    try:
+        return db.confirm_disruption(req)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+@app.post("/api/disruptions/resolve", response_model=TemporaryDisruption)
+def resolve_disruption(req: ResolveDisruptionRequest):
+    try:
+        return db.resolve_disruption(req)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+# --- 6. Operational Surplus Handover & Disposal (PART 3) ---
+@app.post("/api/kitchens/{kitchen_id}/prepared-food/dispose", response_model=PreparedFoodBatch)
+def record_disposal(kitchen_id: str, req: RecordDisposalRequest):
+    try:
+        return db.record_disposal(req)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+@app.post("/api/kitchens/{kitchen_id}/prepared-food/donate", response_model=PreparedFoodBatch)
+def record_donation(kitchen_id: str, req: RecordDonationRequest):
+    try:
+        return db.record_donation(req)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
 

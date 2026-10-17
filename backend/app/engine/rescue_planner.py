@@ -191,10 +191,18 @@ class RescuePlanner:
             # Plan C: STILLGOOD Restaurant Smart Pairing
             # Pairs heavy cream with 8 kg strawberries in dessert special (or substitutes if strawberries out of stock)
             # Zero cream shortage, 2-stage prep for walk-ins!
-            has_cream_blocker = any(d.get("ingredient") == "cream" for d in scenario.supplier_disruptions)
-            has_strawberry_outage = "strawberries" in scenario.excluded_ingredients or any(
-                "strawberr" in d.get("ingredient", "").lower() and d.get("status") in ["out_of_stock", "delayed"]
-                for d in scenario.supplier_disruptions
+            from app.core.database import db
+            active_disruptions = db.get_disruptions(self.kitchen.id, active_only=True)
+            active_confirmed = [d for d in active_disruptions if d.confirmation_status.value == "CONFIRMED"]
+
+            has_cream_blocker = (
+                any(d.get("ingredient") == "cream" for d in scenario.supplier_disruptions) or
+                any("cream" in d.affected_name.lower() for d in active_confirmed)
+            )
+            has_strawberry_outage = (
+                "strawberries" in scenario.excluded_ingredients or
+                any("strawberr" in d.get("ingredient", "").lower() and d.get("status") in ["out_of_stock", "delayed"] for d in scenario.supplier_disruptions) or
+                any("strawberr" in d.affected_name.lower() and d.issue_type == "out_of_stock" for d in active_confirmed)
             )
             alfredo_portions = 0 if has_cream_blocker else half
             pomodoro_portions = target if has_cream_blocker else other_half

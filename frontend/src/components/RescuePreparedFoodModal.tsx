@@ -5,7 +5,12 @@ import {
   SafetyDecision,
   RecommendedRescueAction
 } from '../types';
-import { fetchPreparedFood, intakePreparedFood } from '../services/api';
+import {
+  fetchPreparedFood,
+  intakePreparedFood,
+  recordDisposal,
+  recordDonation
+} from '../services/api';
 import {
   ShieldAlert, ShieldCheck, CheckCircle2, AlertTriangle, X,
   Clock, Thermometer, User, Utensils, Sparkles, Check, ChevronRight,
@@ -35,7 +40,6 @@ export const RescuePreparedFoodModal: React.FC<RescuePreparedFoodModalProps> = (
   const [activeTab, setActiveTab] = useState<'intake' | 'ledger'>('intake');
 
   // Progressive Form State
-  const [formStep, setFormStep] = useState<1 | 2>(1);
   const [dishName, setDishName] = useState('Wild Mushroom Risotto');
   const [servicePeriod, setServicePeriod] = useState('lunch');
   const [preparationTime, setPreparationTime] = useState('12:30');
@@ -53,9 +57,25 @@ export const RescuePreparedFoodModal: React.FC<RescuePreparedFoodModalProps> = (
   // Evaluation outcome
   const [latestBatch, setLatestBatch] = useState<PreparedFoodBatch | null>(null);
 
+  // Operational Action State (Donation & Disposal)
+  const [actionBatch, setActionBatch] = useState<PreparedFoodBatch | null>(null);
+  const [actionMode, setActionMode] = useState<'donate' | 'dispose' | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [actionSuccessMsg, setActionSuccessMsg] = useState<string | null>(null);
+
+  // Donation form fields
+  const [donatePortions, setDonatePortions] = useState(5);
+  const [donatePartner, setDonatePartner] = useState('City Food Rescue Network');
+  const [transportTemp, setTransportTemp] = useState(4.0);
+
+  // Disposal form fields
+  const [disposeWeight, setDisposeWeight] = useState(3.5);
+  const [disposeReason, setDisposeReason] = useState('HACCP safety gate non-compliance');
+
   useEffect(() => {
     if (isOpen) {
       loadBatches();
+      setActionSuccessMsg(null);
     }
   }, [isOpen, kitchenId]);
 
@@ -74,6 +94,7 @@ export const RescuePreparedFoodModal: React.FC<RescuePreparedFoodModalProps> = (
   const handleSubmitIntake = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
+    setActionSuccessMsg(null);
     try {
       const payload: PreparedFoodIntakeRequest = {
         dish_name: dishName,
@@ -93,6 +114,13 @@ export const RescuePreparedFoodModal: React.FC<RescuePreparedFoodModalProps> = (
 
       const result = await intakePreparedFood(kitchenId, payload);
       setLatestBatch(result);
+      // Pre-fill operational action fields
+      setDonatePortions(result.portions_remaining);
+      setDisposeWeight(Number((result.portions_remaining * 0.35).toFixed(1)));
+      if (result.safety_decision !== 'PASS_ELIGIBLE') {
+        const failedReasons = result.rule_checks.filter(c => !c.passed).map(c => c.reason).join('; ');
+        setDisposeReason(failedReasons || 'HACCP Safety Gate Non-Compliance');
+      }
       await loadBatches();
       if (onBatchCreated) onBatchCreated();
     } catch (err: any) {
@@ -106,6 +134,73 @@ export const RescuePreparedFoodModal: React.FC<RescuePreparedFoodModalProps> = (
     setAllergens((prev) =>
       prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
     );
+  };
+
+  const handleTriggerDonation = (batch: PreparedFoodBatch) => {
+    setActionBatch(batch);
+    setDonatePortions(batch.portions_remaining);
+    setDonatePartner('City Food Rescue Network');
+    setTransportTemp(4.0);
+    setActionMode('donate');
+  };
+
+  const handleTriggerDisposal = (batch: PreparedFoodBatch) => {
+    setActionBatch(batch);
+    setDisposeWeight(Number((batch.portions_remaining * 0.35).toFixed(1)));
+    const failedReasons = batch.rule_checks.filter(c => !c.passed).map(c => c.reason).join('; ');
+    setDisposeReason(failedReasons || 'Spoilage / safe window expired');
+    setActionMode('dispose');
+  };
+
+  const handleConfirmDonation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!actionBatch) return;
+    setActionLoading(true);
+    try {
+      const updated = await recordDonation(kitchenId, {
+        batch_id: actionBatch.id,
+        portions_donated: donatePortions,
+        partner_name: donatePartner,
+        transport_temp_c: transportTemp
+      });
+      setActionSuccessMsg(`Donation of ${donatePortions} portions of "${actionBatch.dish_name}" to ${donatePartner} recorded in food recovery manifest.`);
+      setActionMode(null);
+      setActionBatch(null);
+      if (latestBatch && latestBatch.id === actionBatch.id) {
+        setLatestBatch(updated);
+      }
+      await loadBatches();
+      if (onBatchCreated) onBatchCreated();
+    } catch (err: any) {
+      alert(`Failed to record donation: ${err.message}`);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleConfirmDisposal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!actionBatch) return;
+    setActionLoading(true);
+    try {
+      const updated = await recordDisposal(kitchenId, {
+        batch_id: actionBatch.id,
+        disposed_weight_kg: disposeWeight,
+        disposal_reason: disposeReason
+      });
+      setActionSuccessMsg(`Disposal of ${disposeWeight} kg (${actionBatch.dish_name}) logged to environmental waste ledger. Chain of custody updated.`);
+      setActionMode(null);
+      setActionBatch(null);
+      if (latestBatch && latestBatch.id === actionBatch.id) {
+        setLatestBatch(updated);
+      }
+      await loadBatches();
+      if (onBatchCreated) onBatchCreated();
+    } catch (err: any) {
+      alert(`Failed to record disposal: ${err.message}`);
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -160,11 +255,19 @@ export const RescuePreparedFoodModal: React.FC<RescuePreparedFoodModalProps> = (
           </button>
         </div>
 
+        {/* Success message banner if an operational action took place */}
+        {actionSuccessMsg && (
+          <div className="mx-6 mt-4 p-3 bg-sage/15 border border-sage/30 rounded-2xl flex items-center gap-2.5 text-xs text-sage font-medium">
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            <span>{actionSuccessMsg}</span>
+          </div>
+        )}
+
         {/* Main Body */}
-        <div className="p-6 space-y-6 max-h-[78vh] overflow-y-auto font-sans text-espresso">
+        <div className="p-6 space-y-6 max-h-[76vh] overflow-y-auto font-sans text-espresso">
           {activeTab === 'intake' ? (
             <div className="space-y-6">
-              {/* Question 1: What food is left after your service? (Directive 6) */}
+              {/* Question 1: What food is left after your service? */}
               <div>
                 <h4 className="font-serif text-xl font-bold text-espresso">
                   What food is left after your service?
@@ -272,7 +375,7 @@ export const RescuePreparedFoodModal: React.FC<RescuePreparedFoodModalProps> = (
                 {/* Step 2: Progressive Safety & Handling Questions */}
                 <div className="p-5 bg-white rounded-2xl border border-subtle shadow-xs space-y-3">
                   <span className="text-xs font-bold uppercase tracking-wider text-espresso/70 block">
-                    2. Mandatory Safety & Handling History
+                    2. Mandatory Safety & Handling History (FSSAI / HACCP)
                   </span>
 
                   <label className="flex items-start gap-3 p-3 rounded-xl bg-vanilla/60 border border-subtle cursor-pointer hover:bg-vanilla">
@@ -418,7 +521,7 @@ export const RescuePreparedFoodModal: React.FC<RescuePreparedFoodModalProps> = (
                         Safety Gate Decision
                       </span>
                       <h4 className="font-serif text-base font-bold text-espresso">
-                        {latestBatch.dish_name} ({latestBatch.portions_remaining} portions)
+                        {latestBatch.dish_name} ({latestBatch.portions_remaining} portions remaining)
                       </h4>
                     </div>
 
@@ -439,64 +542,78 @@ export const RescuePreparedFoodModal: React.FC<RescuePreparedFoodModalProps> = (
                     </span>
                   </div>
 
-                  {/* If Eligible: Show permissible options (Directive 6) */}
+                  {/* If Eligible: Show permissible options */}
                   {latestBatch.safety_decision === 'PASS_ELIGIBLE' ? (
-                    <div className="space-y-2.5 p-4 bg-vanilla rounded-xl border border-subtle">
+                    <div className="space-y-3 p-4 bg-vanilla rounded-xl border border-subtle">
                       <span className="text-xs font-bold text-espresso block">
-                        Permissible Next Actions (Approved until {latestBatch.safe_use_cutoff}):
+                        Permissible Operational Actions (Safe until {latestBatch.safe_use_cutoff}):
                       </span>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
                         <div className="p-3 bg-white rounded-xl border border-subtle flex flex-col justify-between">
-                          <div className="flex items-center gap-1.5 text-espresso font-semibold">
-                            <Clock className="w-3.5 h-3.5 text-sage" />
-                            <span>1. Ordinary Sale</span>
+                          <div>
+                            <div className="flex items-center gap-1.5 text-espresso font-semibold">
+                              <Clock className="w-3.5 h-3.5 text-sage" />
+                              <span>1. Ordinary Sale</span>
+                            </div>
+                            <span className="text-[11px] text-espresso/60 mt-1 block">
+                              Continue standard service sales within safe holding window.
+                            </span>
                           </div>
-                          <span className="text-[11px] text-espresso/60 mt-1">
-                            Continue standard dinner sales within safe window.
+                          <span className="mt-2 text-[10px] text-sage font-bold bg-sage/10 px-2 py-0.5 rounded w-fit">
+                            Active in Kitchen
                           </span>
                         </div>
 
                         <div className="p-3 bg-white rounded-xl border border-subtle flex flex-col justify-between">
-                          <div className="flex items-center gap-1.5 text-terracotta font-semibold">
-                            <ShoppingBag className="w-3.5 h-3.5" />
-                            <span>2. Meal Bundle</span>
+                          <div>
+                            <div className="flex items-center gap-1.5 text-terracotta font-semibold">
+                              <ShoppingBag className="w-3.5 h-3.5" />
+                              <span>2. Meal Bundle</span>
+                            </div>
+                            <span className="text-[11px] text-espresso/60 mt-1 block">
+                              Combine into discounted rescue combos.
+                            </span>
                           </div>
-                          <span className="text-[11px] text-espresso/60 mt-1">
-                            Combine into discounted evening rescue offer.
-                          </span>
+                          {onNavigateToOffers && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onClose();
+                                onNavigateToOffers();
+                              }}
+                              className="mt-2 px-2.5 py-1 bg-terracotta hover:bg-terracotta-dark text-white text-[11px] font-semibold rounded-lg transition flex items-center justify-center gap-1"
+                            >
+                              <span>Build Offer</span>
+                              <ArrowRight className="w-3 h-3" />
+                            </button>
+                          )}
                         </div>
 
                         <div className="p-3 bg-white rounded-xl border border-subtle flex flex-col justify-between">
-                          <div className="flex items-center gap-1.5 text-espresso font-semibold">
-                            <HeartHandshake className="w-3.5 h-3.5 text-saffron" />
-                            <span>3. Recovery Donation</span>
+                          <div>
+                            <div className="flex items-center gap-1.5 text-espresso font-semibold">
+                              <HeartHandshake className="w-3.5 h-3.5 text-saffron" />
+                              <span>3. Recovery Donation</span>
+                            </div>
+                            <span className="text-[11px] text-espresso/60 mt-1 block">
+                              Dispatch verified surplus to certified charity partner.
+                            </span>
                           </div>
-                          <span className="text-[11px] text-espresso/60 mt-1">
-                            Label and dispatch to verified recovery org.
-                          </span>
-                        </div>
-                      </div>
-
-                      {onNavigateToOffers && (
-                        <div className="pt-2 flex justify-end">
                           <button
                             type="button"
-                            onClick={() => {
-                              onClose();
-                              onNavigateToOffers();
-                            }}
-                            className="px-4 py-2 bg-terracotta hover:bg-terracotta-dark text-white text-xs font-semibold rounded-xl shadow-xs transition flex items-center gap-1.5"
+                            onClick={() => handleTriggerDonation(latestBatch)}
+                            className="mt-2 px-2.5 py-1 bg-espresso hover:bg-cocoa text-vanilla text-[11px] font-semibold rounded-lg transition flex items-center justify-center gap-1"
                           >
-                            <span>Create Discounted Meal Offer with this dish</span>
-                            <ArrowRight className="w-3.5 h-3.5" />
+                            <span>Donate Food</span>
+                            <HeartHandshake className="w-3 h-3" />
                           </button>
                         </div>
-                      )}
+                      </div>
                     </div>
                   ) : (
                     /* If Ineligible: Clearly display why resale or donation cannot proceed */
-                    <div className="p-4 bg-terracotta/10 border border-terracotta/30 rounded-xl space-y-2 text-xs">
+                    <div className="p-4 bg-terracotta/10 border border-terracotta/30 rounded-xl space-y-3 text-xs">
                       <div className="flex items-center gap-2 font-bold text-terracotta">
                         <AlertTriangle className="w-4 h-4 shrink-0" />
                         <span>Why resale or donation cannot proceed:</span>
@@ -510,8 +627,18 @@ export const RescuePreparedFoodModal: React.FC<RescuePreparedFoodModalProps> = (
                             </li>
                           ))}
                       </ul>
-                      <div className="pt-2 text-[11px] text-espresso/70">
-                        <strong>Required Action:</strong> Authorized staff must record this portion weight in the waste log. Do not redistribute.
+                      <div className="pt-2 border-t border-terracotta/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <span className="text-[11px] text-espresso/80">
+                          <strong>Mandatory Action:</strong> Authorized staff must record disposal in the food waste audit log.
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleTriggerDisposal(latestBatch)}
+                          className="px-4 py-1.5 bg-terracotta hover:bg-terracotta-dark text-white font-semibold rounded-xl text-xs flex items-center justify-center gap-1.5 shrink-0"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Log Disposal to Waste Ledger</span>
+                        </button>
                       </div>
                     </div>
                   )}
@@ -530,36 +657,105 @@ export const RescuePreparedFoodModal: React.FC<RescuePreparedFoodModalProps> = (
                   No surplus food logged yet today.
                 </div>
               ) : (
-                <div className="space-y-2.5">
+                <div className="space-y-3">
                   {batches.map((batch) => (
                     <div
                       key={batch.id}
-                      className="p-4 bg-white rounded-2xl border border-subtle shadow-xs flex items-center justify-between text-xs"
+                      className="p-4 bg-white rounded-2xl border border-subtle shadow-xs space-y-3 text-xs"
                     >
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-serif font-bold text-sm text-espresso">
-                            {batch.dish_name}
-                          </span>
-                          <span
-                            className={`text-[9px] font-bold px-2 py-0.5 rounded uppercase ${
-                              batch.safety_decision === 'PASS_ELIGIBLE'
-                                ? 'bg-sage/15 text-sage'
-                                : 'bg-terracotta/15 text-terracotta'
-                            }`}
-                          >
-                            {batch.safety_decision.replace('_', ' ')}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-serif font-bold text-sm text-espresso">
+                              {batch.dish_name}
+                            </span>
+                            <span
+                              className={`text-[9px] font-bold px-2 py-0.5 rounded uppercase ${
+                                batch.safety_decision === 'PASS_ELIGIBLE'
+                                  ? 'bg-sage/15 text-sage'
+                                  : 'bg-terracotta/15 text-terracotta'
+                              }`}
+                            >
+                              {batch.safety_decision.replace('_', ' ')}
+                            </span>
+                            {batch.current_status === 'disposed' && (
+                              <span className="text-[9px] font-bold px-2 py-0.5 rounded uppercase bg-espresso/10 text-espresso">
+                                Disposed
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[11px] text-espresso/60 block mt-0.5">
+                            {batch.portions_remaining} / {batch.portions_initially_available} portions remaining • Holding temp: {batch.holding_temp_c}°C • Safe until: {batch.safe_use_cutoff}
                           </span>
                         </div>
-                        <span className="text-[11px] text-espresso/60 block mt-0.5">
-                          {batch.portions_remaining} / {batch.portions_initially_available} portions remaining • Holding temp: {batch.holding_temp_c}°C
-                        </span>
+
+                        {/* Breakdown badges */}
+                        <div className="flex items-center gap-2 text-[10px]">
+                          {batch.portions_sold > 0 && (
+                            <span className="bg-saffron/15 text-espresso font-semibold px-2 py-0.5 rounded-md">
+                              Sold: {batch.portions_sold}
+                            </span>
+                          )}
+                          {batch.portions_donated > 0 && (
+                            <span className="bg-sage/15 text-sage font-semibold px-2 py-0.5 rounded-md">
+                              Donated: {batch.portions_donated}
+                            </span>
+                          )}
+                          {batch.portions_disposed > 0 && (
+                            <span className="bg-terracotta/15 text-terracotta font-semibold px-2 py-0.5 rounded-md">
+                              Disposed: {batch.portions_disposed}
+                            </span>
+                          )}
+                        </div>
                       </div>
 
-                      <div className="text-right text-[11px] text-espresso/70">
-                        <span className="block font-medium">Safe until: {batch.safe_use_cutoff}</span>
-                        <span className="text-[10px] text-espresso/50 capitalize">{batch.service_period} service</span>
-                      </div>
+                      {/* Operational Action Buttons if portions remain */}
+                      {batch.portions_remaining > 0 && batch.current_status !== 'disposed' && (
+                        <div className="pt-2 border-t border-subtle flex flex-wrap items-center justify-end gap-2">
+                          {batch.safety_decision === 'PASS_ELIGIBLE' ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleTriggerDonation(batch)}
+                                className="px-3 py-1 bg-sage/15 hover:bg-sage/25 text-sage border border-sage/30 rounded-lg text-[11px] font-semibold flex items-center gap-1 transition"
+                              >
+                                <HeartHandshake className="w-3 h-3" />
+                                <span>Donate</span>
+                              </button>
+                              {onNavigateToOffers && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    onClose();
+                                    onNavigateToOffers();
+                                  }}
+                                  className="px-3 py-1 bg-terracotta/15 hover:bg-terracotta/25 text-terracotta border border-terracotta/30 rounded-lg text-[11px] font-semibold flex items-center gap-1 transition"
+                                >
+                                  <ShoppingBag className="w-3 h-3" />
+                                  <span>Create Offer</span>
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleTriggerDisposal(batch)}
+                                className="px-3 py-1 bg-vanilla hover:bg-oat text-espresso/70 border border-subtle rounded-lg text-[11px] font-semibold flex items-center gap-1 transition"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                                <span>Dispose</span>
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleTriggerDisposal(batch)}
+                              className="px-3 py-1 bg-terracotta text-white rounded-lg text-[11px] font-semibold flex items-center gap-1 transition hover:bg-terracotta-dark"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              <span>Log Waste Disposal</span>
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -567,6 +763,179 @@ export const RescuePreparedFoodModal: React.FC<RescuePreparedFoodModalProps> = (
             </div>
           )}
         </div>
+
+        {/* Modal Drawer: Operational Donation Confirmation */}
+        {actionMode === 'donate' && actionBatch && (
+          <div className="absolute inset-0 bg-cocoa/50 backdrop-blur-xs flex items-center justify-center p-4 z-20">
+            <div className="w-full max-w-md bg-white rounded-2xl p-5 border border-subtle shadow-xl space-y-4 animate-in zoom-in-95">
+              <div className="flex items-center justify-between border-b border-subtle pb-3">
+                <div className="flex items-center gap-2">
+                  <HeartHandshake className="w-5 h-5 text-saffron" />
+                  <h4 className="font-serif font-bold text-espresso text-base">
+                    Dispatch Recovery Donation
+                  </h4>
+                </div>
+                <button
+                  onClick={() => setActionMode(null)}
+                  className="p-1 text-espresso/60 hover:text-espresso rounded"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <form onSubmit={handleConfirmDonation} className="space-y-3 text-xs">
+                <div>
+                  <span className="text-[11px] text-espresso/70 block">Surplus Dish:</span>
+                  <span className="font-serif font-bold text-espresso text-sm">
+                    {actionBatch.dish_name}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-medium text-espresso/80 block mb-1">
+                      Portions to Donate
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={actionBatch.portions_remaining}
+                      value={donatePortions}
+                      onChange={(e) => setDonatePortions(parseInt(e.target.value) || 1)}
+                      required
+                      className="w-full px-3 py-1.5 text-xs rounded-xl border border-subtle bg-vanilla font-bold font-mono"
+                    />
+                    <span className="text-[10px] text-espresso/50">Max: {actionBatch.portions_remaining}</span>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-medium text-espresso/80 block mb-1">
+                      Transport Temp (°C)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      value={transportTemp}
+                      onChange={(e) => setTransportTemp(parseFloat(e.target.value) || 4.0)}
+                      required
+                      className="w-full px-3 py-1.5 text-xs rounded-xl border border-subtle bg-vanilla font-bold font-mono"
+                    />
+                    <span className="text-[10px] text-espresso/50">Safe cold-chain &lt; 5°C</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-medium text-espresso/80 block mb-1">
+                    Certified Charity Partner
+                  </label>
+                  <input
+                    type="text"
+                    value={donatePartner}
+                    onChange={(e) => setDonatePartner(e.target.value)}
+                    required
+                    className="w-full px-3 py-1.5 text-xs rounded-xl border border-subtle bg-vanilla"
+                  />
+                </div>
+
+                <div className="pt-2 flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActionMode(null)}
+                    className="px-3 py-1.5 text-xs text-espresso/70 hover:text-espresso"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={actionLoading}
+                    className="px-4 py-2 bg-sage hover:bg-sage/90 text-white font-semibold text-xs rounded-xl flex items-center gap-1.5 shadow-xs"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>{actionLoading ? 'Recording Handover...' : 'Confirm Donation Handover'}</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Modal Drawer: Operational Disposal Confirmation */}
+        {actionMode === 'dispose' && actionBatch && (
+          <div className="absolute inset-0 bg-cocoa/50 backdrop-blur-xs flex items-center justify-center p-4 z-20">
+            <div className="w-full max-w-md bg-white rounded-2xl p-5 border border-subtle shadow-xl space-y-4 animate-in zoom-in-95">
+              <div className="flex items-center justify-between border-b border-subtle pb-3">
+                <div className="flex items-center gap-2">
+                  <Trash2 className="w-5 h-5 text-terracotta" />
+                  <h4 className="font-serif font-bold text-espresso text-base">
+                    Log Food Waste Disposal
+                  </h4>
+                </div>
+                <button
+                  onClick={() => setActionMode(null)}
+                  className="p-1 text-espresso/60 hover:text-espresso rounded"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <form onSubmit={handleConfirmDisposal} className="space-y-3 text-xs">
+                <div>
+                  <span className="text-[11px] text-espresso/70 block">Food Item:</span>
+                  <span className="font-serif font-bold text-espresso text-sm">
+                    {actionBatch.dish_name}
+                  </span>
+                </div>
+
+                <div>
+                  <label className="text-xs font-medium text-espresso/80 block mb-1">
+                    Disposed Weight (kg)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min={0.1}
+                    value={disposeWeight}
+                    onChange={(e) => setDisposeWeight(parseFloat(e.target.value) || 0.1)}
+                    required
+                    className="w-full px-3 py-1.5 text-xs rounded-xl border border-subtle bg-vanilla font-bold font-mono"
+                  />
+                  <span className="text-[10px] text-espresso/50">Portions to be removed: {actionBatch.portions_remaining}</span>
+                </div>
+
+                <div>
+                  <label className="text-xs font-medium text-espresso/80 block mb-1">
+                    Audit Disposal Reason
+                  </label>
+                  <input
+                    type="text"
+                    value={disposeReason}
+                    onChange={(e) => setDisposeReason(e.target.value)}
+                    required
+                    className="w-full px-3 py-1.5 text-xs rounded-xl border border-subtle bg-vanilla"
+                  />
+                </div>
+
+                <div className="pt-2 flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActionMode(null)}
+                    className="px-3 py-1.5 text-xs text-espresso/70 hover:text-espresso"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={actionLoading}
+                    className="px-4 py-2 bg-terracotta hover:bg-terracotta-dark text-white font-semibold text-xs rounded-xl flex items-center gap-1.5 shadow-xs"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>{actionLoading ? 'Recording Waste...' : 'Confirm Waste Record'}</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
 
         {/* Footer */}
         <div className="bg-oat px-6 py-3.5 border-t border-subtle flex justify-end">
@@ -582,4 +951,5 @@ export const RescuePreparedFoodModal: React.FC<RescuePreparedFoodModalProps> = (
     </div>
   );
 };
+
 export default RescuePreparedFoodModal;

@@ -4,7 +4,14 @@ from typing import Dict, List, Optional, Any
 from app.models.schemas import (
     KitchenProfile, InventoryBatch, Recipe, Supplier,
     ParsedScenario, PlanEvaluation, EvidenceReceipt,
-    ApprovalRecord, ActualOutcomeLog, ImpactDashboardMetrics
+    ApprovalRecord, ActualOutcomeLog, ImpactDashboardMetrics,
+    KitchenPolicy, KitchenOperationalFacts, TemporaryDisruption,
+    DisruptionStatus, KitchenContext, ConfirmDisruptionRequest,
+    ResolveDisruptionRequest, RecordDisposalRequest, RecordDonationRequest,
+    PreparedFoodBatch, PreparedFoodStatus, SafetyDecision,
+    RecommendedRescueAction, SafetyRuleCheck, DietaryTag,
+    MealComboProposal, ComboPriceOption, AttentionItem, KitchenCompanionSummary,
+    WalkinEvent, BatchEligibility, BatchStorageStatus
 )
 from app.data.seed_data import (
     KITCHEN_PROFILES, APEX_INGREDIENTS, APEX_INVENTORY,
@@ -54,6 +61,44 @@ class KitchenDatabase:
         self.outcomes: Dict[str, List[ActualOutcomeLog]] = {
             "kitchen_corporate_apex": copy.deepcopy(SAMPLE_OUTCOME_LOGS),
             "kitchen_restaurant_verde": copy.deepcopy(VERDE_OUTCOME_LOGS)
+        }
+
+        # Part 1: Versioned Kitchen Policies
+        self.policies: Dict[str, KitchenPolicy] = {
+            "kitchen_corporate_apex": KitchenPolicy(
+                version=1,
+                kitchen_id="kitchen_corporate_apex",
+                approved_recipes_count=len(APEX_RECIPES),
+                capacity_meals_per_service=500,
+                dietary_strictness="standard",
+                dietary_exclusions_allowed=["dairy", "gluten", "nuts"],
+                minimum_contracted_meals=120,
+                supplier_contract_rules=[
+                    {"supplier_id": "supp_fresh_dairy", "rule": "Must deliver before 08:00 AM lunch cutoff", "penalty": "Credit for late arrivals"}
+                ],
+                approved_safety_policy="Corporate Cafeteria Standard HACCP Protocol (2026)",
+                last_updated="2026-10-18 00:00 UTC"
+            ),
+            "kitchen_restaurant_verde": KitchenPolicy(
+                version=1,
+                kitchen_id="kitchen_restaurant_verde",
+                approved_recipes_count=len(VERDE_RECIPES),
+                capacity_meals_per_service=220,
+                dietary_strictness="standard",
+                dietary_exclusions_allowed=["dairy", "gluten", "nuts", "vegan"],
+                minimum_contracted_meals=35,
+                supplier_contract_rules=[
+                    {"supplier_id": "supp_verde_dairy", "rule": "Delivery before 11:00 AM cutoff for dinner service", "penalty": "Next-day credit"}
+                ],
+                approved_safety_policy="Osteria Verde FSSAI/HACCP Artisanal Standards (2026)",
+                last_updated="2026-10-18 00:00 UTC"
+            )
+        }
+
+        # Part 1: Persistent Temporary Disruptions Store
+        self.disruptions: Dict[str, List[TemporaryDisruption]] = {
+            "kitchen_corporate_apex": [],
+            "kitchen_restaurant_verde": []
         }
 
         # STILLGOOD 3.0: Prepared Food Surplus, Combos, and Walk-in Events
@@ -331,6 +376,10 @@ class KitchenDatabase:
     def record_walkin_event(self, event: Any) -> Any:
         if event.kitchen_id not in self.walkin_events:
             self.walkin_events[event.kitchen_id] = []
+        # Idempotency check: don't double count if event with same ID already ingested
+        for existing in self.walkin_events[event.kitchen_id]:
+            if getattr(existing, "id", None) == getattr(event, "id", None):
+                return existing
         self.walkin_events[event.kitchen_id].append(event)
         return event
 
@@ -557,6 +606,200 @@ class KitchenDatabase:
             actual_spoilage_reduction_pct=34.5,
             notes=notes
         )
+
+    # ==========================================
+    # PART 1: DYNAMIC KITCHEN CONTEXT & DISRUPTIONS
+    # ==========================================
+
+    def get_kitchen_policy(self, kitchen_id: str) -> KitchenPolicy:
+        if kitchen_id in self.policies:
+            return self.policies[kitchen_id]
+        kitchen = self.get_kitchen(kitchen_id)
+        recipes = self.get_recipes(kitchen_id)
+        return KitchenPolicy(
+            version=1,
+            kitchen_id=kitchen_id,
+            approved_recipes_count=len(recipes),
+            capacity_meals_per_service=kitchen.capacity_meals_per_service if kitchen else 200,
+            dietary_strictness="standard",
+            dietary_exclusions_allowed=["dairy", "gluten", "nuts"],
+            minimum_contracted_meals=35 if (kitchen and kitchen.type.value == "restaurant_cafe") else 120,
+            supplier_contract_rules=[],
+            approved_safety_policy="FSSAI / HACCP Kitchen Safety Standard (2026)",
+            last_updated="2026-10-18 00:00 UTC"
+        )
+
+    def get_operational_facts(self, kitchen_id: str) -> KitchenOperationalFacts:
+        from datetime import datetime, timezone
+        now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        kitchen = self.get_kitchen(kitchen_id)
+        batches = self.get_inventory(kitchen_id)
+        eligible_count = len([b for b in batches if b.eligibility_status != BatchEligibility.INELIGIBLE])
+        at_risk_kg = sum(b.remaining_qty for b in batches if b.eligibility_status == BatchEligibility.AT_RISK)
+        confirmed = kitchen.confirmed_reservations if kitchen else 70
+        walkins = sum(getattr(e, "party_size", 1) for e in self.get_walkin_events(kitchen_id))
+        prep_batches = self.get_prepared_batches(kitchen_id)
+        holding_portions = sum(p.portions_remaining for p in prep_batches if p.status in [PreparedFoodStatus.SAFE_HOLDING, PreparedFoodStatus.PREPARED_UNSERVED])
+        cap = kitchen.capacity_meals_per_service if kitchen else 220
+        avail_cap = max(0, cap - confirmed - walkins)
+        active_orders = len([s for s in self.get_suppliers(kitchen_id) if s.status != "unavailable"])
+
+        return KitchenOperationalFacts(
+            kitchen_id=kitchen_id,
+            eligible_inventory_batches_count=eligible_count,
+            at_risk_inventory_kg=round(at_risk_kg, 2),
+            confirmed_reservations=confirmed,
+            current_recorded_arrivals=walkins,
+            active_supplier_orders_count=active_orders,
+            prepared_meals_in_holding=holding_portions,
+            available_prep_capacity=avail_cap,
+            last_synced=now_str
+        )
+
+    def get_kitchen_context(self, kitchen_id: str) -> KitchenContext:
+        kitchen = self.get_kitchen(kitchen_id)
+        if not kitchen:
+            kitchen = self.get_kitchen("kitchen_restaurant_verde")
+        policy = self.get_kitchen_policy(kitchen_id)
+        facts = self.get_operational_facts(kitchen_id)
+        disruptions = self.get_disruptions(kitchen_id, active_only=False)
+        active = [d for d in disruptions if d.is_active and d.confirmation_status in [DisruptionStatus.CONFIRMED, DisruptionStatus.PENDING_CONFIRMATION]]
+        past = [d for d in disruptions if not d.is_active or d.confirmation_status in [DisruptionStatus.RESOLVED, DisruptionStatus.REJECTED]]
+        return KitchenContext(
+            kitchen=kitchen,
+            policy=policy,
+            operational_facts=facts,
+            active_disruptions=active,
+            past_disruptions=past
+        )
+
+    def get_disruptions(self, kitchen_id: str, active_only: bool = True) -> List[TemporaryDisruption]:
+        items = self.disruptions.get(kitchen_id, [])
+        if active_only:
+            return [d for d in items if d.is_active and d.confirmation_status in [DisruptionStatus.CONFIRMED, DisruptionStatus.PENDING_CONFIRMATION]]
+        return items
+
+    def stage_disruption(self, disruption: TemporaryDisruption) -> TemporaryDisruption:
+        if disruption.kitchen_id not in self.disruptions:
+            self.disruptions[disruption.kitchen_id] = []
+        # Idempotency check: avoid duplicate event if matching active disruption exists
+        for existing in self.disruptions[disruption.kitchen_id]:
+            if (existing.affected_name.lower() == disruption.affected_name.lower() and
+                existing.issue_type == disruption.issue_type and
+                existing.is_active):
+                return existing
+        self.disruptions[disruption.kitchen_id].append(disruption)
+        return disruption
+
+    def confirm_disruption(self, req: ConfirmDisruptionRequest) -> TemporaryDisruption:
+        from datetime import datetime, timezone
+        now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        target_disruption = None
+        for k_id, d_list in self.disruptions.items():
+            for d in d_list:
+                if d.id == req.disruption_id:
+                    target_disruption = d
+                    break
+            if target_disruption:
+                break
+        if not target_disruption:
+            raise ValueError(f"Disruption {req.disruption_id} not found")
+
+        if req.confirmed:
+            target_disruption.confirmation_status = DisruptionStatus.CONFIRMED
+            target_disruption.confirmation_details = {
+                "stock_depleted": req.stock_depleted,
+                "supplier_halted": req.supplier_halted,
+                "notes": req.notes,
+                "confirmed_by": req.confirmed_by
+            }
+            target_disruption.last_updated = now_str
+            # If manager verified stock is depleted, zero out existing batch
+            if req.stock_depleted:
+                for b in self.get_inventory(target_disruption.kitchen_id):
+                    if target_disruption.affected_name.lower() in b.ingredient_name.lower():
+                        b.remaining_qty = 0.0
+                        b.notes = f"Zeroed by confirmed disruption {target_disruption.id}"
+        else:
+            target_disruption.confirmation_status = DisruptionStatus.REJECTED
+            target_disruption.is_active = False
+            target_disruption.last_updated = now_str
+
+        return target_disruption
+
+    def resolve_disruption(self, req: ResolveDisruptionRequest) -> TemporaryDisruption:
+        from datetime import datetime, timezone
+        now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        target_disruption = None
+        for k_id, d_list in self.disruptions.items():
+            for d in d_list:
+                if d.id == req.disruption_id:
+                    target_disruption = d
+                    break
+            if target_disruption:
+                break
+        if not target_disruption:
+            raise ValueError(f"Disruption {req.disruption_id} not found")
+
+        target_disruption.confirmation_status = DisruptionStatus.RESOLVED
+        target_disruption.is_active = False
+        target_disruption.actual_resolution_time = now_str
+        target_disruption.last_updated = now_str
+
+        # Replenish verified stock if delivered
+        if req.stock_replenished_qty > 0:
+            for b in self.get_inventory(target_disruption.kitchen_id):
+                if target_disruption.affected_name.lower() in b.ingredient_name.lower():
+                    b.remaining_qty = req.stock_replenished_qty
+                    b.notes = f"Restocked via resolution of {target_disruption.id}"
+
+        return target_disruption
+
+    # ==========================================
+    # PART 3: OPERATIONAL FOOD RESCUE & HANDOVER
+    # ==========================================
+
+    def record_disposal(self, req: RecordDisposalRequest) -> PreparedFoodBatch:
+        target_batch = None
+        for k_id, batches in self.prepared_batches.items():
+            for b in batches:
+                if b.id == req.batch_id:
+                    target_batch = b
+                    break
+            if target_batch:
+                break
+        if not target_batch:
+            raise ValueError(f"Batch {req.batch_id} not found")
+
+        target_batch.portions_disposed += target_batch.portions_remaining
+        target_batch.measured_disposal_weight_kg = req.disposed_weight_kg
+        target_batch.portions_remaining = 0
+        target_batch.status = PreparedFoodStatus.DISPOSED
+        target_batch.notes = f"Disposed: {req.disposal_reason} by {req.disposed_by}"
+        return target_batch
+
+    def record_donation(self, req: RecordDonationRequest) -> PreparedFoodBatch:
+        target_batch = None
+        for k_id, batches in self.prepared_batches.items():
+            for b in batches:
+                if b.id == req.batch_id:
+                    target_batch = b
+                    break
+            if target_batch:
+                break
+        if not target_batch:
+            raise ValueError(f"Batch {req.batch_id} not found")
+
+        # Mandatory Safety Gate: Unsafe batches cannot be donated!
+        if target_batch.eligibility_decision == SafetyDecision.INELIGIBLE or target_batch.served_to_customer:
+            raise ValueError("Safety Gate Violation: Batch is ineligible or was served to customer. Cannot be donated.")
+
+        donated_qty = min(target_batch.portions_remaining, req.portions_donated)
+        target_batch.portions_donated += donated_qty
+        target_batch.portions_remaining -= donated_qty
+        target_batch.status = PreparedFoodStatus.OUTCOME_VERIFIED if target_batch.portions_remaining == 0 else PreparedFoodStatus.ELIGIBLE_DONATION
+        target_batch.notes = f"Donated {donated_qty} portions to authorized partner {req.partner_name} at {req.transport_temp_c}°C transport temp"
+        return target_batch
 
 # Global singleton
 db = KitchenDatabase()

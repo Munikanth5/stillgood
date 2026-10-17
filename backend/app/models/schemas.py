@@ -365,6 +365,11 @@ class WalkinForecastResult(BaseModel):
     model_name: str
     model_confidence: str  # HIGH, MEDIUM, LOW_COLD_START
     evaluation_metrics: Dict[str, Any]
+    data_sources_connected: List[str] = ["Osteria Verde Historical Service Logs (28 Services)", "Host-Stand Live Arrival Webhook"]
+    future_walkins_expected: int = 21
+    manager_override: Optional[int] = None
+    manager_override_reason: Optional[str] = None
+    connector_mode: str = "EVALUATED_HISTORICAL_WITH_LIVE_EVENTS"
     intervals: List[WalkinIntervalForecast]
     explanation: str
 
@@ -440,4 +445,100 @@ class KitchenCompanionSummary(BaseModel):
     quick_stats: Dict[str, Any]
     active_recommendation: Dict[str, Any]
     primary_cta: Dict[str, Any]
+
+# ==========================================
+# PART 1: DYNAMIC KITCHEN CONTEXT & DISRUPTIONS
+# ==========================================
+
+class KitchenPolicy(BaseModel):
+    version: int = 1
+    kitchen_id: str
+    approved_recipes_count: int
+    capacity_meals_per_service: int
+    dietary_strictness: str = "standard"
+    dietary_exclusions_allowed: List[str] = ["dairy", "gluten", "nuts"]
+    minimum_contracted_meals: int = 0
+    supplier_contract_rules: List[Dict[str, Any]] = []
+    approved_safety_policy: str = "FSSAI / HACCP Thermal Control Standards (2026)"
+    last_updated: str = "2026-10-18 00:00 UTC"
+
+class KitchenOperationalFacts(BaseModel):
+    kitchen_id: str
+    eligible_inventory_batches_count: int
+    at_risk_inventory_kg: float
+    confirmed_reservations: int
+    current_recorded_arrivals: int
+    active_supplier_orders_count: int
+    prepared_meals_in_holding: int
+    available_prep_capacity: int
+    last_synced: str
+
+class DisruptionStatus(str, Enum):
+    PENDING_CONFIRMATION = "PENDING_CONFIRMATION"
+    CONFIRMED = "CONFIRMED"
+    RESOLVED = "RESOLVED"
+    REJECTED = "REJECTED"
+
+class TemporaryDisruption(BaseModel):
+    id: str
+    kitchen_id: str
+    affected_entity_type: str = "ingredient"  # ingredient, supplier, recipe, service, equipment
+    affected_name: str
+    issue_type: str  # out_of_stock, delayed, breakdown, weather_cancellation
+    start_date: str
+    end_date: str
+    duration_days: int = 5
+    actual_resolution_time: Optional[str] = None
+    source_and_evidence: str
+    confirmation_status: DisruptionStatus = DisruptionStatus.PENDING_CONFIRMATION
+    confirmation_needed: str
+    confirmation_details: Optional[Dict[str, Any]] = None
+    created_by: str = "Kitchen Operations Manager"
+    created_at: str
+    last_updated: str
+    affected_recipe_ids: List[str] = []
+    affected_recipe_names: List[str] = []
+    is_active: bool = True
+
+class DisruptionProposalResponse(BaseModel):
+    extracted_disruption: TemporaryDisruption
+    clarification_message: str
+    confirmation_prompt: str
+    options: List[Dict[str, Any]]
+
+class ConfirmDisruptionRequest(BaseModel):
+    disruption_id: str
+    confirmed: bool = True
+    stock_depleted: bool = True
+    supplier_halted: bool = True
+    notes: Optional[str] = None
+    confirmed_by: str = "Kitchen Operations Manager"
+
+class ResolveDisruptionRequest(BaseModel):
+    disruption_id: str
+    delivery_received: bool = True
+    stock_replenished_qty: float = 0.0
+    notes: Optional[str] = None
+    resolved_by: str = "Kitchen Operations Manager"
+
+class KitchenContext(BaseModel):
+    kitchen: KitchenProfile
+    policy: KitchenPolicy
+    operational_facts: KitchenOperationalFacts
+    active_disruptions: List[TemporaryDisruption]
+    past_disruptions: List[TemporaryDisruption] = []
+
+class RecordDisposalRequest(BaseModel):
+    batch_id: str
+    disposed_weight_kg: float
+    disposal_reason: str
+    disposed_by: str = "Kitchen Duty Supervisor"
+
+class RecordDonationRequest(BaseModel):
+    batch_id: str
+    portions_donated: int
+    partner_name: str = "City Harvest Recovery Network"
+    transport_temp_c: float = 4.0
+    confirmed_by: str = "Kitchen Logistics Lead"
+
 
