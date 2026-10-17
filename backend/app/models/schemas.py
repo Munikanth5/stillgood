@@ -254,5 +254,190 @@ class ImpactDashboardMetrics(BaseModel):
     total_discarded_waste_kg: float
     measured_waste_per_meal_kg: float
     forecast_mean_error_pct: float
-    actual_spoilage_reduction_pct: float
     notes: List[str]
+
+# ==========================================
+# STILLGOOD 3.0 EXTENSIONS
+# ==========================================
+
+class PreparedFoodStatus(str, Enum):
+    PREPARED_UNSERVED = "prepared_unserved"
+    SAFE_HOLDING = "safe_holding"
+    OFFERED_FOR_SALE = "offered_for_sale"
+    RESERVED = "reserved"
+    SOLD = "sold"
+    ELIGIBLE_DONATION = "eligible_donation"
+    BLOCKED_REVIEW = "blocked_review"
+    INELIGIBLE = "ineligible"
+    DISPOSED = "disposed"
+    OUTCOME_VERIFIED = "outcome_verified"
+
+class SafetyDecision(str, Enum):
+    ELIGIBLE = "ELIGIBLE"
+    NEEDS_STAFF_REVIEW = "NEEDS_STAFF_REVIEW"
+    INELIGIBLE = "INELIGIBLE"
+
+class RecommendedRescueAction(str, Enum):
+    ORDINARY_SALE = "ORDINARY_SALE"
+    DISCOUNTED_COMBO = "DISCOUNTED_COMBO"
+    NEXT_SERVICE_REUSE = "NEXT_SERVICE_REUSE"
+    DONATION = "DONATION"
+    DISPOSAL = "DISPOSAL"
+
+class SafetyRuleCheck(BaseModel):
+    rule_name: str
+    passed: bool
+    observed_value: str
+    threshold: str
+    message: str
+    critical_for_safety: bool = True
+
+class PreparedFoodBatch(BaseModel):
+    id: str
+    kitchen_id: str
+    dish_name: str
+    recipe_id: Optional[str] = None
+    portions_remaining: int
+    portions_initially_available: int
+    prepared_at: str
+    service_period: str  # breakfast, lunch, dinner, buffet, event, catering
+    served_to_customer: bool = False  # If true -> instantly disqualified
+    buffet_exposed: bool = False      # If true and > 2h -> ineligible for resale
+    continuously_controlled: bool = True # Held by staff at >= 63C or <= 5C
+    holding_temperature_c: float
+    holding_duration_hours: float
+    safe_use_cutoff: str
+    allergens: List[str] = []
+    dietary_tags: List[DietaryTag] = []
+    status: PreparedFoodStatus = PreparedFoodStatus.PREPARED_UNSERVED
+    eligibility_decision: SafetyDecision = SafetyDecision.NEEDS_STAFF_REVIEW
+    eligibility_reason: str = ""
+    recommended_action: RecommendedRescueAction = RecommendedRescueAction.DISCOUNTED_COMBO
+    rule_checks: List[SafetyRuleCheck] = []
+    portions_sold: int = 0
+    portions_included_in_offers: int = 0
+    portions_donated: int = 0
+    portions_disposed: int = 0
+    measured_disposal_weight_kg: float = 0.0
+    notes: Optional[str] = None
+    is_demo: bool = True
+    created_at: Optional[str] = None
+
+class PreparedFoodIntakeRequest(BaseModel):
+    kitchen_id: str
+    dish_name: str
+    recipe_id: Optional[str] = None
+    portions_remaining: int
+    prepared_at: str
+    service_period: str
+    served_to_customer: bool = False
+    buffet_exposed: bool = False
+    continuously_controlled: bool = True
+    holding_temperature_c: float
+    holding_duration_hours: float
+    safe_use_cutoff: str
+    allergens: List[str] = []
+    dietary_tags: List[str] = []
+    notes: Optional[str] = None
+
+class WalkinIntervalForecast(BaseModel):
+    time_slot: str  # e.g., "12:30 - 13:00"
+    expected_walkins: int
+    lower_bound_90pct: int
+    upper_bound_90pct: int
+    is_current_slot: bool = False
+
+class WalkinForecastResult(BaseModel):
+    kitchen_id: str
+    service_period: str
+    timestamp: str
+    interval_minutes: int = 30
+    confirmed_reservations: int
+    expected_reservation_attendance: int
+    predicted_walkins_next_30m: int
+    walkin_prediction_interval: List[int] # [lower, upper]
+    total_expected_covers_today: int
+    high_demand_scenario: int
+    low_demand_scenario: int
+    current_recorded_arrivals: int
+    remaining_seating_capacity: int
+    extra_prep_batch_recommendation: str
+    model_name: str
+    model_confidence: str  # HIGH, MEDIUM, LOW_COLD_START
+    evaluation_metrics: Dict[str, Any]
+    intervals: List[WalkinIntervalForecast]
+    explanation: str
+
+class WalkinEvent(BaseModel):
+    id: str
+    kitchen_id: str
+    timestamp: str
+    party_size: int
+    event_type: str  # "walkin_arrival", "reservation_arrival", "cancellation", "takeaway"
+    notes: Optional[str] = None
+
+class ComboPriceOption(BaseModel):
+    tier_name: str  # "Quick-Sale 20%", "Value-Combo 35%", "Flash Recovery 50%"
+    discount_pct: int
+    price: float
+    margin_pct: float
+    sell_through_probability: str
+    trade_off_explanation: str
+
+class MealComboProposal(BaseModel):
+    combo_id: str
+    kitchen_id: str
+    title: str
+    customer_description: str
+    included_dishes: List[Dict[str, Any]]
+    allergens: List[str]
+    dietary_tags: List[str]
+    normal_total_price: float
+    cost_basis: float
+    suggested_prices: List[ComboPriceOption]
+    selected_price: float
+    available_quantity: int
+    reserved_quantity: int = 0
+    sold_quantity: int = 0
+    safe_pickup_cutoff: str
+    status: str = "DRAFT" # DRAFT, APPROVED, ACTIVE, SOLD_OUT, EXPIRED
+    why_gemini_paired: str
+    deterministic_checks: List[SafetyRuleCheck]
+    is_safe: bool = True
+    rejection_reasons: List[str] = []
+
+class MealOfferOrderRequest(BaseModel):
+    combo_id: str
+    quantity: int = 1
+    customer_name: str = "In-App Demo Diner"
+
+class MealOfferOrderResult(BaseModel):
+    success: bool
+    transaction_id: str
+    combo_id: str
+    quantity_ordered: int
+    total_paid: float
+    remaining_inventory: int
+    status: str
+    message: str
+
+class AttentionItem(BaseModel):
+    id: str
+    category: str # "demand", "surplus_review", "pending_decision"
+    urgency: str  # "high", "medium", "low"
+    title: str
+    description: str
+    suggested_action: str
+    action_type: str # "plan_meals", "predict_guests", "rescue_food", "create_offers"
+
+class KitchenCompanionSummary(BaseModel):
+    kitchen_id: str
+    kitchen_name: str
+    service_period: str
+    greeting: str
+    operational_status: str
+    attention_items: List[AttentionItem]
+    quick_stats: Dict[str, Any]
+    active_recommendation: Dict[str, Any]
+    primary_cta: Dict[str, Any]
+

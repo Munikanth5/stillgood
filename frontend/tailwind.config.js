@@ -7,36 +7,50 @@ export default {
   theme: {
     extend: {
       colors: {
-        forest: {
-          900: '#102F29',
-          800: '#153D34', // Primary dark green
-          700: '#1E4E43',
-          600: '#23785D', // Emerald accent
-          500: '#2E9374',
-          100: '#D7EBE4',
-          50: '#EAF2EA',  // Soft sage background
-        },
-        ivory: {
-          DEFAULT: '#F8F7F2', // Warm ivory background
-          cream: '#F1EEE7',   // Subtle cream
-          darker: '#E7E2D6',
+        // STILLGOOD 3.0 Hospitality Palette
+        vanilla: '#FFF9F2',
+        espresso: '#452C29',
+        cocoa: '#30211E',
+        saffron: '#E8A44E',
+        oat: '#F4E8DA',
+        subtle: '#E8DBCF',
+        sage: {
+          DEFAULT: '#58775A',
+          light: '#EAF2EA',
+          dark: '#3F5841',
         },
         terracotta: {
-          DEFAULT: '#C57B55', // Terracotta accent (attention/changes)
-          light: '#DE9976',
-          dark: '#A65F3A',
+          DEFAULT: '#B95438',
+          hover: '#9E442D',
+          light: '#F8EBE7',
+          dark: '#853420',
           bg: '#FAF0EB',
         },
+        // Backwards-compatible aliases
+        forest: {
+          900: '#30211E', // Deep cocoa
+          800: '#452C29', // Espresso brown
+          700: '#58775A', // Sage
+          600: '#58775A',
+          500: '#E8A44E', // Saffron
+          100: '#EAF2EA',
+          50: '#F4E8DA',
+        },
+        ivory: {
+          DEFAULT: '#FFF9F2', // Vanilla cream
+          cream: '#F4E8DA',   // Oat cream
+          darker: '#E8DBCF',  // Subtle border
+        },
         ink: {
-          DEFAULT: '#1E2925', // Dark text
-          muted: '#66736B',   // Muted text
-          subtle: '#8C9A92',
-          border: '#D8D4C8',
+          DEFAULT: '#452C29', // Espresso brown
+          muted: '#7B6764',   // Warm muted
+          subtle: '#A89996',
+          border: '#E8DBCF',  // Subtle border
         }
       },
       fontFamily: {
-        serif: ['Fraunces', 'Newsreader', 'Georgia', 'serif'],
-        sans: ['Manrope', 'Inter', 'system-ui', 'sans-serif'],
+        serif: ['Fraunces', 'Georgia', 'serif'],
+        sans: ['"DM Sans"', '-apple-system', 'BlinkMacSystemFont', 'system-ui', 'sans-serif'],
       },
     },
   },

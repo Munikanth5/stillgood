@@ -29,6 +29,7 @@ import { EvidenceReceiptModal } from './components/EvidenceReceiptModal';
 import { ApprovalModal } from './components/ApprovalModal';
 
 // Pages
+import { KitchenCompanion } from './pages/KitchenCompanion';
 import { LivingDashboard } from './pages/LivingDashboard';
 import { TomorrowPlan } from './pages/TomorrowPlan';
 import { AIAssistant } from './pages/AIAssistant';
@@ -46,7 +47,7 @@ export const App: React.FC = () => {
   const [inventory, setInventory] = useState<InventoryBatch[]>([]);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [activeTab, setActiveTab] = useState<TabKey>('today');
+  const [activeTab, setActiveTab] = useState<TabKey>('companion');
 
   const [scenario, setScenario] = useState<ParsedScenario | null>(null);
   const [plans, setPlans] = useState<{
@@ -203,18 +204,18 @@ export const App: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-ivory flex items-center justify-center p-4">
+      <div className="min-h-screen bg-vanilla flex items-center justify-center p-4">
         <div className="text-center space-y-4">
-          <div className="w-12 h-12 border-4 border-forest-800 border-t-forest-500 rounded-full animate-spin mx-auto" />
-          <h2 className="font-serif text-xl font-bold text-ink">STILLGOOD Kitchen Decision Twin</h2>
-          <p className="text-xs text-ink-muted">Loading verified kitchen records & deterministic twin engine...</p>
+          <div className="w-12 h-12 border-4 border-terracotta border-t-transparent rounded-full animate-spin mx-auto" />
+          <h2 className="font-serif text-xl font-bold text-espresso">STILLGOOD Kitchen Decision Twin</h2>
+          <p className="text-xs text-espresso/60">Loading verified kitchen records & deterministic twin engine...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-ivory text-ink flex flex-col font-sans">
+    <div className="min-h-screen bg-vanilla text-espresso flex flex-col font-sans">
       {/* Header */}
       <Header
         kitchens={kitchens}
@@ -234,6 +235,19 @@ export const App: React.FC = () => {
 
       {/* Main Content View */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {activeTab === 'companion' && currentKitchen && (
+          <KitchenCompanion
+            kitchen={currentKitchen}
+            activePlan={activePlan}
+            onViewReceipt={() => setIsReceiptOpen(true)}
+            onOpenApproval={(p) => {
+              setPlanToApprove(p);
+              setIsApprovalOpen(true);
+            }}
+            onNavigateToTab={(tab) => setActiveTab(tab)}
+          />
+        )}
+
         {activeTab === 'today' && currentKitchen && (
           <LivingDashboard
             kitchen={currentKitchen}
@@ -342,13 +356,13 @@ export const App: React.FC = () => {
       </main>
 
       {/* Footer */}
-      <footer className="bg-ivory-cream border-t border-ink-border/50 py-6 text-xs text-ink-muted">
+      <footer className="bg-oat border-t border-subtle py-6 text-xs text-espresso/70">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <span className="font-serif font-bold text-ink">STILLGOOD</span>
+            <span className="font-serif font-bold text-espresso">STILLGOOD 3.0</span>
             <span>• Google AI Builder Cup 2026 (Sustainability & Social Impact)</span>
           </div>
-          <div className="text-[11px] font-mono">
+          <div className="text-[11px] font-mono text-espresso/60">
             Understand &rarr; Forecast &rarr; Simulate &rarr; Replan &rarr; Validate &rarr; Explain &rarr; Approve &rarr; Measure &rarr; Learn
           </div>
         </div>

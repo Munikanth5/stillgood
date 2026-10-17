@@ -189,3 +189,119 @@ def get_impact_dashboard(kitchen_id: str):
 def reset_system():
     db.reset_to_demo()
     return {"status": "success", "message": "Demo data reset to verified initial state."}
+
+# ==========================================
+# STILLGOOD 3.0 API ENDPOINTS
+# ==========================================
+
+from app.models.schemas import (
+    PreparedFoodBatch, PreparedFoodIntakeRequest, WalkinForecastResult,
+    WalkinEvent, MealComboProposal, MealOfferOrderRequest,
+    MealOfferOrderResult, KitchenCompanionSummary
+)
+from app.engine.safety_gate import DeterministicSafetyGate
+from app.engine.walkin_forecaster import WalkinDemandForecaster
+from app.ai.meal_combo_generator import GeminiMealComboGenerator
+
+# --- 1. Kitchen Companion Summary ---
+@app.get("/api/kitchens/{kitchen_id}/companion-summary", response_model=KitchenCompanionSummary)
+def get_companion_summary(kitchen_id: str):
+    return db.get_companion_summary(kitchen_id)
+
+# --- 2. Post-Service Prepared Food Rescue ---
+@app.get("/api/kitchens/{kitchen_id}/prepared-food", response_model=List[PreparedFoodBatch])
+def get_prepared_batches(kitchen_id: str):
+    return db.get_prepared_batches(kitchen_id)
+
+@app.post("/api/kitchens/{kitchen_id}/prepared-food", response_model=PreparedFoodBatch)
+def intake_prepared_food(kitchen_id: str, req: PreparedFoodIntakeRequest):
+    import time
+    decision, reason, action, rule_checks = DeterministicSafetyGate.evaluate_prepared_batch(req)
+    
+    batch = PreparedFoodBatch(
+        id=f"PREP-{kitchen_id[:3].upper()}-{int(time.time() * 1000) % 100000}",
+        kitchen_id=kitchen_id,
+        dish_name=req.dish_name,
+        recipe_id=req.recipe_id,
+        portions_remaining=req.portions_remaining,
+        portions_initially_available=req.portions_remaining,
+        prepared_at=req.prepared_at,
+        service_period=req.service_period,
+        served_to_customer=req.served_to_customer,
+        buffet_exposed=req.buffet_exposed,
+        continuously_controlled=req.continuously_controlled,
+        holding_temperature_c=req.holding_temperature_c,
+        holding_duration_hours=req.holding_duration_hours,
+        safe_use_cutoff=req.safe_use_cutoff,
+        allergens=req.allergens,
+        dietary_tags=[],
+        status="safe_holding" if decision.value == "ELIGIBLE" else ("blocked_review" if decision.value == "NEEDS_STAFF_REVIEW" else "ineligible"),
+        eligibility_decision=decision,
+        eligibility_reason=reason,
+        recommended_action=action,
+        rule_checks=rule_checks,
+        notes=req.notes,
+        is_demo=True,
+        created_at=time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
+    )
+    return db.add_prepared_batch(batch)
+
+# --- 3. Walk-in Demand Forecasting ---
+@app.get("/api/kitchens/{kitchen_id}/walkin-forecast", response_model=WalkinForecastResult)
+def get_walkin_forecast(kitchen_id: str, cancellations: int = 0, current_walkins: int = 0):
+    kitchen = db.get_kitchen(kitchen_id)
+    if not kitchen:
+        kitchen = db.get_kitchen("kitchen_restaurant_verde")
+    return WalkinDemandForecaster.generate_forecast(
+        kitchen=kitchen,
+        service_period=kitchen.default_service_period,
+        current_walkin_count=current_walkins,
+        cancellations_count=cancellations
+    )
+
+@app.post("/api/kitchens/{kitchen_id}/walkin-event", response_model=WalkinEvent)
+def record_walkin_event(kitchen_id: str, event: WalkinEvent):
+    return db.record_walkin_event(event)
+
+# --- 4. Meal Combos & Offers ---
+@app.get("/api/kitchens/{kitchen_id}/combos", response_model=List[MealComboProposal])
+def get_combos(kitchen_id: str):
+    return db.get_combos(kitchen_id)
+
+@app.post("/api/kitchens/{kitchen_id}/combos/generate", response_model=List[MealComboProposal])
+def generate_combos(kitchen_id: str):
+    batches = db.get_prepared_batches(kitchen_id)
+    eligible = [b for b in batches if b.eligibility_decision.value == "ELIGIBLE" and b.portions_remaining > 0]
+    combos = GeminiMealComboGenerator.generate_combos(kitchen_id, eligible)
+    for c in combos:
+        db.save_combo(c)
+    return combos
+
+@app.post("/api/kitchens/{kitchen_id}/combos/{combo_id}/publish", response_model=MealComboProposal)
+def publish_combo(kitchen_id: str, combo_id: str, selected_price: Optional[float] = None):
+    combos = db.get_combos(kitchen_id)
+    target = next((c for c in combos if c.combo_id == combo_id), None)
+    if not target:
+        raise HTTPException(status_code=404, detail="Combo not found")
+    if selected_price:
+        target.selected_price = selected_price
+    target.status = "APPROVED"
+    db.save_combo(target)
+    return target
+
+@app.post("/api/combos/{combo_id}/order", response_model=MealOfferOrderResult)
+def order_combo(combo_id: str, req: MealOfferOrderRequest):
+    result = db.order_combo(combo_id=combo_id, quantity=req.quantity, customer_name=req.customer_name)
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["message"])
+    return MealOfferOrderResult(
+        success=result["success"],
+        transaction_id=result["transaction_id"],
+        combo_id=result["combo_id"],
+        quantity_ordered=result["quantity_ordered"],
+        total_paid=result["total_paid"],
+        remaining_inventory=result["remaining_inventory"],
+        status=result["status"],
+        message=result["message"]
+    )
+

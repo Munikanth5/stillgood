@@ -1,7 +1,10 @@
 import {
   KitchenProfile, InventoryBatch, Recipe, Supplier,
   ParsedScenario, PlanEvaluation, EvidenceReceipt,
-  ApprovalRecord, ActualOutcomeLog, ImpactDashboardMetrics
+  ApprovalRecord, ActualOutcomeLog, ImpactDashboardMetrics,
+  KitchenCompanionSummary, PreparedFoodBatch, PreparedFoodIntakeRequest,
+  WalkinForecastResult, WalkinEvent, MealComboProposal,
+  MealOfferOrderRequest, MealOfferOrderResult
 } from '../types';
 
 const API_BASE = '/api';
@@ -161,3 +164,97 @@ export async function resetDemoState(): Promise<{ status: string; message: strin
   if (!res.ok) throw new Error('Failed to reset demo');
   return res.json();
 }
+
+// ==========================================
+// STILLGOOD 3.0 API METHODS
+// ==========================================
+
+export async function fetchCompanionSummary(kitchenId: string): Promise<KitchenCompanionSummary> {
+  const res = await fetch(`${API_BASE}/kitchens/${kitchenId}/companion-summary`);
+  if (!res.ok) throw new Error('Failed to fetch companion summary');
+  return res.json();
+}
+
+export async function fetchPreparedFood(kitchenId: string): Promise<PreparedFoodBatch[]> {
+  const res = await fetch(`${API_BASE}/kitchens/${kitchenId}/prepared-food`);
+  if (!res.ok) throw new Error('Failed to fetch prepared food');
+  return res.json();
+}
+
+export async function intakePreparedFood(kitchenId: string, payload: PreparedFoodIntakeRequest): Promise<PreparedFoodBatch> {
+  const res = await fetch(`${API_BASE}/kitchens/${kitchenId}/prepared-food`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to record prepared surplus food');
+  }
+  return res.json();
+}
+
+export async function fetchWalkinForecast(
+  kitchenId: string,
+  params?: { rain_scenario?: boolean; lunch_or_dinner?: string }
+): Promise<WalkinForecastResult> {
+  const query = new URLSearchParams();
+  if (params?.rain_scenario !== undefined) query.set('rain_scenario', String(params.rain_scenario));
+  if (params?.lunch_or_dinner) query.set('lunch_or_dinner', params.lunch_or_dinner);
+  const qStr = query.toString() ? `?${query.toString()}` : '';
+  const res = await fetch(`${API_BASE}/kitchens/${kitchenId}/walkin-forecast${qStr}`);
+  if (!res.ok) throw new Error('Failed to fetch walk-in forecast');
+  return res.json();
+}
+
+export async function recordWalkinEvent(
+  kitchenId: string,
+  event: { party_size: number; table_type?: string; notes?: string }
+): Promise<WalkinEvent> {
+  const res = await fetch(`${API_BASE}/kitchens/${kitchenId}/walkin-event`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(event),
+  });
+  if (!res.ok) throw new Error('Failed to record walk-in arrival');
+  return res.json();
+}
+
+export async function fetchCombos(kitchenId: string): Promise<MealComboProposal[]> {
+  const res = await fetch(`${API_BASE}/kitchens/${kitchenId}/combos`);
+  if (!res.ok) throw new Error('Failed to fetch meal combos');
+  return res.json();
+}
+
+export async function generateCombos(kitchenId: string): Promise<MealComboProposal[]> {
+  const res = await fetch(`${API_BASE}/kitchens/${kitchenId}/combos/generate`, {
+    method: 'POST',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to generate meal combinations');
+  }
+  return res.json();
+}
+
+export async function publishCombo(kitchenId: string, comboId: string): Promise<MealComboProposal> {
+  const res = await fetch(`${API_BASE}/kitchens/${kitchenId}/combos/${comboId}/publish`, {
+    method: 'POST',
+  });
+  if (!res.ok) throw new Error('Failed to publish meal combo');
+  return res.json();
+}
+
+export async function orderCombo(comboId: string, payload: MealOfferOrderRequest): Promise<MealOfferOrderResult> {
+  const res = await fetch(`${API_BASE}/combos/${comboId}/order`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to complete combo order');
+  }
+  return res.json();
+}
+

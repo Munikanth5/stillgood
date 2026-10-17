@@ -275,3 +275,206 @@ export interface ImpactDashboardMetrics {
   actual_spoilage_reduction_pct: number;
   notes: string[];
 }
+
+// ==========================================
+// STILLGOOD 3.0 EXTENSIONS
+// ==========================================
+
+export type PreparedFoodStatus =
+  | 'unserved_controlled'
+  | 'safe_holding'
+  | 'offered_for_sale'
+  | 'reserved'
+  | 'sold'
+  | 'eligible_for_donation'
+  | 'blocked_safety_review'
+  | 'ineligible'
+  | 'disposed'
+  | 'outcome_verified';
+
+export type SafetyDecision =
+  | 'PASS_ELIGIBLE'
+  | 'NEEDS_STAFF_REVIEW'
+  | 'INELIGIBLE_DISPOSE';
+
+export type RecommendedRescueAction =
+  | 'CONTINUE_ORDINARY_SALE'
+  | 'OFFER_DISCOUNTED_COMBO'
+  | 'REUSE_NEXT_SERVICE'
+  | 'DONATE_RECOVERY_ORG'
+  | 'DISPOSE_AND_LOG';
+
+export interface SafetyRuleCheck {
+  rule_id: string;
+  rule_name: string;
+  passed: boolean;
+  critical: boolean;
+  evidence_observed: string;
+  reason: string;
+}
+
+export interface PreparedFoodBatch {
+  id: string;
+  kitchen_id: string;
+  dish_name: string;
+  service_period: string;
+  preparation_time: string;
+  portions_initially_available: number;
+  portions_remaining: number;
+  portions_sold: number;
+  portions_donated: number;
+  portions_disposed: number;
+  customer_contact: boolean;
+  buffet_exposed: boolean;
+  buffet_exposure_hours: number;
+  staff_controlled: boolean;
+  holding_temp_c: number;
+  safe_use_cutoff: string;
+  allergen_profile: string[];
+  handling_notes?: string;
+  authorized_staff: string;
+  safety_decision: SafetyDecision;
+  rule_checks: SafetyRuleCheck[];
+  recommended_action: RecommendedRescueAction;
+  current_status: PreparedFoodStatus;
+  created_at: string;
+}
+
+export interface PreparedFoodIntakeRequest {
+  dish_name: string;
+  service_period: string;
+  preparation_time: string;
+  portions: number;
+  customer_contact: boolean;
+  buffet_exposed: boolean;
+  buffet_exposure_hours: number;
+  staff_controlled: boolean;
+  holding_temp_c: number;
+  safe_use_cutoff: string;
+  allergen_profile: string[];
+  authorized_staff: string;
+  handling_notes?: string;
+}
+
+export interface WalkinIntervalForecast {
+  time_slot: string;
+  expected_reservations: number;
+  expected_walkins: number;
+  total_covers: number;
+  lower_bound_90: number;
+  upper_bound_90: number;
+  actual_arrivals_so_far: number;
+}
+
+export interface WalkinForecastResult {
+  kitchen_id: string;
+  service_date: string;
+  service_period: string;
+  forecast_method: string;
+  historical_baseline_covers: number;
+  model_version: string;
+  total_expected_covers: number;
+  total_reservations_expected: number;
+  total_walkins_expected: number;
+  interval_forecasts: WalkinIntervalForecast[];
+  evaluation_metrics: {
+    backtest_mae_covers: number;
+    backtest_mape_pct: number;
+    sample_size_days: number;
+    uncertainty_level: string;
+  };
+  extra_prep_batch_advice: {
+    recommended_extra_batches: number;
+    recommended_safety_portions: number;
+    rationale: string;
+  };
+  weather_scenario?: string;
+  local_events?: string[];
+}
+
+export interface WalkinEvent {
+  id: string;
+  kitchen_id: string;
+  timestamp: string;
+  party_size: number;
+  table_type: string;
+  estimated_duration_minutes: number;
+  notes?: string;
+}
+
+export interface ComboPriceOption {
+  band_name: string;
+  discount_pct: number;
+  discounted_price: number;
+  standard_price: number;
+  gross_margin_pct: number;
+  savings_amount: number;
+  recommended: boolean;
+}
+
+export interface MealComboProposal {
+  combo_id: string;
+  kitchen_id: string;
+  combo_title: string;
+  description: string;
+  component_batches: string[];
+  component_dishes: string[];
+  original_combined_price: number;
+  price_options: ComboPriceOption[];
+  portions_available: number;
+  allergen_profile: string[];
+  safe_until: string;
+  status: 'draft' | 'published' | 'sold_out' | 'expired';
+  created_at: string;
+}
+
+export interface MealOfferOrderRequest {
+  combo_id: string;
+  quantity: number;
+  chosen_band: string;
+  customer_name?: string;
+}
+
+export interface MealOfferOrderResult {
+  success: boolean;
+  order_id: string;
+  combo_id: string;
+  combo_title: string;
+  quantity_ordered: number;
+  total_price: number;
+  remaining_portions: number;
+  decremented_batches: Array<{
+    batch_id: string;
+    dish_name: string;
+    decremented_by: number;
+    remaining_portions: number;
+  }>;
+  message: string;
+}
+
+export interface AttentionItem {
+  id: string;
+  title: string;
+  detail: string;
+  urgency: 'high' | 'medium' | 'low';
+  action_type: 'walkin' | 'prepared_rescue' | 'replan' | 'combo';
+}
+
+export interface KitchenCompanionSummary {
+  kitchen_id: string;
+  kitchen_name: string;
+  service_period: string;
+  status_message: string;
+  attention_items: AttentionItem[];
+  ai_recommendation: {
+    title: string;
+    what_to_do: string;
+    why_it_helps: string;
+    what_is_required: string;
+    what_is_uncertain: string;
+    suggested_action: string;
+  };
+  pending_rescue_batches_count: number;
+  active_combos_count: number;
+  walkins_expected_today: number;
+}

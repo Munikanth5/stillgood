@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  Compass,
   LayoutDashboard,
   CalendarCheck2,
   Bot,
@@ -13,6 +14,7 @@ import {
 } from 'lucide-react';
 
 export type TabKey =
+  | 'companion'
   | 'today'
   | 'tomorrow'
   | 'assistant'
@@ -36,11 +38,12 @@ export const Navigation: React.FC<NavigationProps> = ({
   hasPendingPlan
 }) => {
   const tabs = [
-    { key: 'today' as TabKey, label: 'Today', icon: LayoutDashboard },
+    { key: 'companion' as TabKey, label: 'Kitchen Companion', icon: Compass, badge: 'V3' },
+    { key: 'today' as TabKey, label: 'Today Dashboard', icon: LayoutDashboard },
+    { key: 'comparison' as TabKey, label: 'Plan Comparison', icon: GitCompare, badge: hasPendingPlan ? 'Ready' : undefined },
     { key: 'tomorrow' as TabKey, label: "Tomorrow's Plan", icon: CalendarCheck2 },
     { key: 'assistant' as TabKey, label: 'AI Assistant', icon: Bot },
     { key: 'simulator' as TabKey, label: 'What-If Simulator', icon: Sliders },
-    { key: 'comparison' as TabKey, label: 'Plan Comparison', icon: GitCompare, badge: hasPendingPlan ? 'Ready' : undefined },
     { key: 'rescue' as TabKey, label: 'Rescue Studio', icon: Sparkles },
     { key: 'inventory' as TabKey, label: 'Inventory', icon: Boxes },
     { key: 'outcomes' as TabKey, label: 'Actual Outcomes', icon: ClipboardCheck },
@@ -49,7 +52,7 @@ export const Navigation: React.FC<NavigationProps> = ({
   ];
 
   return (
-    <nav className="bg-ivory-cream border-b border-ink-border/50 sticky top-16 z-30 overflow-x-auto">
+    <nav className="bg-vanilla/95 backdrop-blur-sm border-b border-subtle sticky top-16 z-30 overflow-x-auto">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex space-x-1 sm:space-x-2 py-2">
           {tabs.map((tab) => {
@@ -59,17 +62,17 @@ export const Navigation: React.FC<NavigationProps> = ({
               <button
                 key={tab.key}
                 onClick={() => onTabChange(tab.key)}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition whitespace-nowrap ${
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-medium transition whitespace-nowrap ${
                   isActive
-                    ? 'bg-forest-800 text-ivory shadow-sm'
-                    : 'text-ink-muted hover:text-ink hover:bg-ivory'
+                    ? 'bg-espresso text-vanilla shadow-xs'
+                    : 'text-espresso/70 hover:text-espresso hover:bg-oat'
                 }`}
               >
-                <Icon className={`w-4 h-4 ${isActive ? 'text-forest-500' : 'text-ink-muted'}`} />
+                <Icon className={`w-4 h-4 ${isActive ? 'text-saffron' : 'text-espresso/60'}`} />
                 <span>{tab.label}</span>
                 {tab.badge && (
                   <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold uppercase tracking-wider ${
-                    isActive ? 'bg-terracotta text-ivory' : 'bg-terracotta/20 text-terracotta'
+                    isActive ? 'bg-terracotta text-white' : 'bg-terracotta/15 text-terracotta'
                   }`}>
                     {tab.badge}
                   </span>
@@ -82,3 +85,4 @@ export const Navigation: React.FC<NavigationProps> = ({
     </nav>
   );
 };
+
