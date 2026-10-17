@@ -358,38 +358,39 @@ export interface PreparedFoodIntakeRequest {
 
 export interface WalkinIntervalForecast {
   time_slot: string;
-  expected_reservations: number;
   expected_walkins: number;
-  total_covers: number;
-  lower_bound_90: number;
-  upper_bound_90: number;
-  actual_arrivals_so_far: number;
+  lower_bound_90pct: number;
+  upper_bound_90pct: number;
+  is_current_slot: boolean;
 }
 
 export interface WalkinForecastResult {
   kitchen_id: string;
-  service_date: string;
   service_period: string;
-  forecast_method: string;
-  historical_baseline_covers: number;
-  model_version: string;
-  total_expected_covers: number;
-  total_reservations_expected: number;
-  total_walkins_expected: number;
-  interval_forecasts: WalkinIntervalForecast[];
+  timestamp: string;
+  interval_minutes: number;
+  confirmed_reservations: number;
+  expected_reservation_attendance: number;
+  predicted_walkins_next_30m: number;
+  walkin_prediction_interval: number[];
+  total_expected_covers_today: number;
+  high_demand_scenario: number;
+  low_demand_scenario: number;
+  current_recorded_arrivals: number;
+  remaining_seating_capacity: number;
+  extra_prep_batch_recommendation: string;
+  model_name: string;
+  model_confidence: string;
   evaluation_metrics: {
-    backtest_mae_covers: number;
-    backtest_mape_pct: number;
-    sample_size_days: number;
-    uncertainty_level: string;
+    model_type: string;
+    training_window: string;
+    mean_absolute_error_covers: number;
+    mean_absolute_percentage_error: string;
+    r_squared: number;
+    reservation_turnup_rate: number;
   };
-  extra_prep_batch_advice: {
-    recommended_extra_batches: number;
-    recommended_safety_portions: number;
-    rationale: string;
-  };
-  weather_scenario?: string;
-  local_events?: string[];
+  intervals: WalkinIntervalForecast[];
+  explanation: string;
 }
 
 export interface WalkinEvent {

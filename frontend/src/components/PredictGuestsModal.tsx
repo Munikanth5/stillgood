@@ -149,36 +149,40 @@ export const PredictGuestsModal: React.FC<PredictGuestsModalProps> = ({
                 <div className="p-3.5 bg-white rounded-xl border border-subtle shadow-xs">
                   <span className="text-[10px] text-espresso/60 uppercase font-semibold block">Total Expected Covers</span>
                   <div className="font-serif text-2xl font-bold text-cocoa mt-0.5">
-                    {forecast.total_expected_covers}
+                    {forecast.total_expected_covers_today}
                   </div>
                   <span className="text-[11px] text-espresso/70">
-                    Hist. baseline: {forecast.historical_baseline_covers}
+                    Range: {forecast.low_demand_scenario} – {forecast.high_demand_scenario}
                   </span>
                 </div>
 
                 <div className="p-3.5 bg-white rounded-xl border border-subtle shadow-xs">
                   <span className="text-[10px] text-espresso/60 uppercase font-semibold block">Likely Reservations</span>
                   <div className="font-serif text-2xl font-bold text-sage mt-0.5">
-                    {forecast.total_reservations_expected}
+                    {forecast.expected_reservation_attendance}
                   </div>
-                  <span className="text-[11px] text-espresso/70">86% turnup model</span>
+                  <span className="text-[11px] text-espresso/70">
+                    {forecast.confirmed_reservations} booked (86% turnup)
+                  </span>
                 </div>
 
                 <div className="p-3.5 bg-white rounded-xl border border-subtle shadow-xs">
-                  <span className="text-[10px] text-espresso/60 uppercase font-semibold block">Expected Walk-Ins</span>
+                  <span className="text-[10px] text-espresso/60 uppercase font-semibold block">Next 30m Walk-Ins</span>
                   <div className="font-serif text-2xl font-bold text-terracotta mt-0.5">
-                    {forecast.total_walkins_expected}
+                    {forecast.predicted_walkins_next_30m}
                   </div>
-                  <span className="text-[11px] text-espresso/70">Poisson count mode</span>
+                  <span className="text-[11px] text-espresso/70 font-mono">
+                    90% band: [{forecast.walkin_prediction_interval[0]} – {forecast.walkin_prediction_interval[1]}]
+                  </span>
                 </div>
 
                 <div className="p-3.5 bg-white rounded-xl border border-subtle shadow-xs">
                   <span className="text-[10px] text-espresso/60 uppercase font-semibold block">Model Accuracy</span>
                   <div className="font-serif text-2xl font-bold text-espresso mt-0.5">
-                    {(100 - forecast.evaluation_metrics.backtest_mape_pct).toFixed(1)}%
+                    {forecast.evaluation_metrics.mean_absolute_percentage_error}
                   </div>
                   <span className="text-[11px] text-espresso/70 font-mono">
-                    MAE: {forecast.evaluation_metrics.backtest_mae_covers} covers
+                    MAE: {forecast.evaluation_metrics.mean_absolute_error_covers} covers
                   </span>
                 </div>
               </div>
@@ -191,12 +195,12 @@ export const PredictGuestsModal: React.FC<PredictGuestsModalProps> = ({
                     <span className="text-xs font-bold text-espresso uppercase tracking-wider">
                       Chef Prep Batch Advice
                     </span>
-                    <span className="bg-sage/15 text-sage text-[10px] font-bold px-2 py-0.5 rounded">
-                      +{forecast.extra_prep_batch_advice.recommended_safety_portions} Safety Portions
+                    <span className="bg-sage/15 text-sage text-[10px] font-bold px-2 py-0.5 rounded uppercase">
+                      {forecast.model_confidence} Confidence
                     </span>
                   </div>
                   <p className="text-xs text-espresso/80">
-                    {forecast.extra_prep_batch_advice.rationale}
+                    {forecast.extra_prep_batch_recommendation}
                   </p>
                 </div>
               </div>
@@ -211,7 +215,7 @@ export const PredictGuestsModal: React.FC<PredictGuestsModalProps> = ({
                     </span>
                   </div>
                   <span className="text-[11px] text-espresso/60">
-                    90% Prediction Intervals [Lower – Upper]
+                    Poisson 90% Confidence Bounds [Lower – Upper]
                   </span>
                 </div>
 
@@ -220,49 +224,49 @@ export const PredictGuestsModal: React.FC<PredictGuestsModalProps> = ({
                     <thead className="bg-oat/50 text-[11px] text-espresso/70 font-semibold uppercase border-b border-subtle">
                       <tr>
                         <th className="px-4 py-2.5">Time Slot</th>
-                        <th className="px-4 py-2.5">Reservations</th>
-                        <th className="px-4 py-2.5">Walk-Ins (Poisson)</th>
-                        <th className="px-4 py-2.5 font-bold text-espresso">Total Expected</th>
+                        <th className="px-4 py-2.5">Status</th>
+                        <th className="px-4 py-2.5 font-bold text-espresso">Expected Walk-Ins</th>
                         <th className="px-4 py-2.5">90% Range</th>
                         <th className="px-4 py-2.5">Arrival Bar</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-subtle/60">
-                      {forecast.interval_forecasts.map((slot: WalkinIntervalForecast, idx: number) => {
-                        const maxCovers = 30;
-                        const widthPct = Math.min(100, Math.round((slot.total_covers / maxCovers) * 100));
+                      {forecast.intervals.map((slot: WalkinIntervalForecast, idx: number) => {
+                        const maxWalkins = 15;
+                        const widthPct = Math.min(100, Math.round((slot.expected_walkins / maxWalkins) * 100));
                         return (
-                          <tr key={idx} className="hover:bg-vanilla/40 transition">
+                          <tr
+                            key={idx}
+                            className={`transition ${
+                              slot.is_current_slot
+                                ? 'bg-saffron/10 font-semibold'
+                                : 'hover:bg-vanilla/40'
+                            }`}
+                          >
                             <td className="px-4 py-2 font-mono font-medium text-espresso">
                               {slot.time_slot}
                             </td>
-                            <td className="px-4 py-2 text-sage font-medium">
-                              {slot.expected_reservations}
+                            <td className="px-4 py-2">
+                              {slot.is_current_slot ? (
+                                <span className="bg-terracotta text-white text-[9px] font-bold px-1.5 py-0.2 rounded uppercase">
+                                  Current Window
+                                </span>
+                              ) : (
+                                <span className="text-espresso/50 text-[10px]">Upcoming</span>
+                              )}
                             </td>
-                            <td className="px-4 py-2 text-terracotta font-medium">
-                              {slot.expected_walkins}
-                            </td>
-                            <td className="px-4 py-2 font-bold text-espresso">
-                              {slot.total_covers} covers
+                            <td className="px-4 py-2 font-bold text-terracotta">
+                              {slot.expected_walkins} walk-ins
                             </td>
                             <td className="px-4 py-2 font-mono text-espresso/70">
-                              [{slot.lower_bound_90} – {slot.upper_bound_90}]
+                              [{slot.lower_bound_90pct} – {slot.upper_bound_90pct}]
                             </td>
                             <td className="px-4 py-2 w-36">
                               <div className="h-2 w-full bg-oat rounded-full overflow-hidden flex">
                                 <div
-                                  className="h-full bg-sage"
-                                  style={{
-                                    width: `${slot.total_covers > 0 ? (slot.expected_reservations / slot.total_covers) * widthPct : 0}%`
-                                  }}
-                                  title="Reservations"
-                                />
-                                <div
                                   className="h-full bg-terracotta"
-                                  style={{
-                                    width: `${slot.total_covers > 0 ? (slot.expected_walkins / slot.total_covers) * widthPct : 0}%`
-                                  }}
-                                  title="Walk-ins"
+                                  style={{ width: `${widthPct}%` }}
+                                  title="Expected walk-ins"
                                 />
                               </div>
                             </td>
