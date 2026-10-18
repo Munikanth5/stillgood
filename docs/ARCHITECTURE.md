@@ -1,91 +1,135 @@
-# STILLGOOD Technical Architecture
+# STILLGOOD — Production Technical Architecture & System Flow
 
-## 1. Executive Vision
-**STILLGOOD** is an AI-powered Kitchen Decision Twin engineered for commercial and institutional food-service organizations. It solves two critical operational problems simultaneously:
-1. **Preventing Avoidable Food Waste:** Rescuing at-risk inventory, eliminating excess batch preparation, and preventing unneeded supplier purchasing.
-2. **Protecting Meal Availability & Food Safety:** Enforcing hard dietary minimums (e.g. Vegetarian, Halal, Diabetic), respecting supplier delivery cutoffs, and strictly quarantining unsafe or recalled inventory.
+**Last Updated:** October 18, 2026  
+**Primary Production URL:** [https://project-698b49f2-0692-4677-948.web.app](https://project-698b49f2-0692-4677-948.web.app)  
+**Microservice Endpoint:** [https://stillgood-backend-518727782721.asia-south1.run.app](https://stillgood-backend-518727782721.asia-south1.run.app)  
+**Google Cloud Project:** `project-698b49f2-0692-4677-948` (Number: `518727782721`)  
+**Deployment Region:** `asia-south1` (Mumbai, India)  
+**GitHub Repository:** [https://github.com/Munikanth5/stillgood](https://github.com/Munikanth5/stillgood)
 
 ---
 
-## 2. Google Cloud Platform Architecture
+## 1. Executive Summary
 
+**STILLGOOD** is an Intelligent Kitchen Decision Twin deployed on Google Cloud. It eliminates avoidable food waste across institutional and commercial kitchens (cafeterias, restaurants, hospitals, buffets) while strictly maintaining food availability, dietary compliance, and food safety standards.
+
+Unlike conventional restaurant software that relies on static checkboxes or estimates 1 generic meal per guest, STILLGOOD combines:
+1. **Google Vertex AI (Gemini 2.5 Flash):** Natural-language disruption parsing and structured menu combo generation.
+2. **Deterministic Operations Engine:** Mathematical recipe scaling, FEFO (First-Expired, First-Out) inventory allocation, and Poisson walk-in guest forecasting.
+3. **Food Safety Gate & Evidence Receipts:** Cryptographic audit receipts, HACCP thermal checks, and human manager approval gates.
+4. **Atomic Anti-Oversell Transactions:** Real-time Cloud Firestore updates guaranteeing that surplus meals cannot be double-sold.
+
+---
+
+## 2. Google Cloud Production Architecture
+
+The application is deployed across managed Google Cloud and Firebase services in the Mumbai (`asia-south1`) region:
+
+```mermaid
+graph TD
+    User["Kitchen Staff & Diners<br/>(Mobile / Desktop Browser)"] -->|"HTTPS / Fast Edge"| CDN["Firebase Hosting Edge CDN<br/>project-698b49f2-0692-4677-948.web.app"]
+    
+    subgraph Google_Cloud_Platform ["Google Cloud Platform — asia-south1 (Mumbai)"]
+        CDN -->|"Static Assets<br/>(HTML, CSS, JS)"| Cache["Edge Content Cache<br/>(no-cache for index.html)"]
+        CDN -->|"Rewrites /api/**<br/>Reverse Proxy"| CloudRun["Google Cloud Run<br/>Service: stillgood-backend<br/>min: 0, max: 3, concurrency: 80"]
+        
+        CloudRun -->|"Official Google GenAI SDK<br/>IAM Service Account Auth"| VertexAI["Google Vertex AI<br/>Model: gemini-2.5-flash<br/>Prompt Templates & OCR"]
+        
+        CloudRun -->|"Python Engine<br/>Atomic Decrements"| Engine["Deterministic Decision Engine<br/>• Poisson Walk-in Model<br/>• FEFO Batch Allocator<br/>• Safety Gate HACCP Rules"]
+        
+        Engine -->|"Native Mode<br/>roles/datastore.user"| Firestore[("Cloud Firestore (default)<br/>Collections:<br/>• kitchens<br/>• customer_orders<br/>• combos<br/>• offer_transactions<br/>• disruptions")]
+        
+        CloudBuild["Cloud Build & Artifact Registry<br/>asia-south1-docker.pkg.dev/.../backend:latest"] -.->|"Deploy Container"| CloudRun
+    end
+
+    style CDN fill:#FFEBE6,stroke:#FF5630,stroke-width:2px;
+    style CloudRun fill:#E3FCEF,stroke:#006644,stroke-width:2px;
+    style VertexAI fill:#DEEBFF,stroke:#0747A6,stroke-width:2px;
+    style Firestore fill:#FFF0B3,stroke:#FF991F,stroke-width:2px;
+    style Engine fill:#EAE6FF,stroke:#403294,stroke-width:2px;
 ```
-                                      ┌────────────────────────────────────────────────────────┐
-                                      │                      USERS / CHEFS                     │
-                                      └───────────────────────────┬────────────────────────────┘
-                                                                  │
-                                      ┌───────────────────────────▼────────────────────────────┐
-                                      │                    FIREBASE HOSTING                    │
-                                      │         React 18 + TypeScript + Tailwind CSS           │
-                                      │           Linear Polish + Hospitality Design           │
-                                      └───────────────────────────┬────────────────────────────┘
-                                                                  │ HTTPS / REST
-                                      ┌───────────────────────────▼────────────────────────────┐
-                                      │                  GOOGLE CLOUD RUN                      │
-                                      │                 FastAPI + Python 3.13                  │
-                                      │             Pydantic v2 Contract Validation            │
-                                      └───┬───────────────────────────────┬────────────────────┘
-                                          │                               │
-                ┌─────────────────────────┴─────────────┐   ┌─────────────┴────────────────────────┐
-                │        GOOGLE VERTEX AI               │   │      DETERMINISTIC KITCHEN ENGINE    │
-                │        Gemini 2.5 Flash               │   │                                      │
-                ├───────────────────────────────────────┤   ├──────────────────────────────────────┤
-                │ • Disruption Alert Understanding     │   │ • FEFO Inventory Batch Allocation    │
-                │ • Multimodal Note & Slip OCR (Vision) │   │ • Recipe Scaling & Aggregate Demand  │
-                │ • Candidate Rescue Plan Generation   │   │ • Pack-Size Purchase Rounding        │
-                │ • Transparent Audit Explanations     │   │ • Hard Operational Constraint Gates  │
-                │ • Tool Calling / Structured Output   │   │ • Mathematical Evidence Receipts     │
-                └───────────────────────────────────────┘   └─────────────┬────────────────────────┘
-                                                                          │
-                                                    ┌─────────────────────┴────────────────────────┐
-                                                    │             GOOGLE CLOUD FIRESTORE           │
-                                                    │    Kitchens • Batches • Recipes • Audits     │
-                                                    └──────────────────────────────────────────────┘
+
+---
+
+## 3. End-to-End Operational Decision Flow
+
+Every disruption or demand shift follows a strict 8-step decision loop that bridges natural language and deterministic execution:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Staff as Kitchen Staff / Manager
+    participant UI as STILLGOOD UI (React/Vite)
+    participant API as Cloud Run Backend (FastAPI)
+    participant AI as Vertex AI (Gemini 2.5 Flash)
+    participant Engine as Deterministic Math Engine
+    participant DB as Cloud Firestore (Native Mode)
+
+    Staff->>UI: Enter Disruption ("Strawberries out of stock for 5 days")
+    UI->>API: POST /api/ai/interpret
+    API->>AI: Structured extraction with validated schema
+    AI-->>API: Extracted { ingredient: "strawberries", issue: "unavailable", duration: 5 }
+    API-->>UI: Staged Disruption Proposal
+    Staff->>UI: Confirm Stock Depleted & Supplier Halted
+    UI->>API: POST /api/disruptions/confirm
+    API->>DB: Save Disruption & Zero Stock in Firestore
+    API->>Engine: Recalculate Menu Demand & Substitute Recipes
+    Engine->>Engine: Run FEFO Allocation & Dietary Constraints Gate
+    Engine-->>API: Generated MenuPreparationPlan + Cook-Now Portion Advice
+    API-->>UI: Return Action Plan ("Fire 2 portions now for active tickets; serve 25 from holding wells")
+    Staff->>UI: View "Why this works" Evidence Receipt
 ```
 
 ---
 
-## 3. The 9-Stage Decision Workflow
+## 4. Deployed Component Specifications
 
-Unlike generic conversational bots, STILLGOOD executes a strict 9-stage operational decision loop:
-
-1. **Understand:** Disruption alerts (voice, text, or delivery slip photo) are processed by Gemini into typed parameters.
-2. **Forecast:** Historical attendance, calendar day-matching, and badge swipe data update target meal counts.
-3. **Simulate:** Real-time What-If simulator recalculates recipe ingredient needs across multiple headcount and supply scenarios.
-4. **Replan:** Generates 3 comparative options:
-   - *Plan A:* Retain original schedule (shows excess surplus & supply failures).
-   - *Plan B:* Simple proportional demand scaling (shows remaining shortage blockers).
-   - *Plan C (STILLGOOD):* Smart rescue substituting missing ingredients with in-stock approved recipes and prioritizing at-risk perishables.
-5. **Validate:** Independent deterministic code evaluates hard operational constraints:
-   - Dietary minimums (e.g. $\ge 120$ vegetarian portions).
-   - Supplier delivery cutoffs (e.g. delivery arrives after lunch closes).
-   - Kitchen batch capacity ceilings.
-   - Food safety exclusions (quarantined or expired stock).
-6. **Explain:** Generates a mathematically verifiable **Evidence Receipt** disclosing calculations, version numbers, lot codes, and rejected alternatives.
-7. **Approve:** Human kitchen manager reviews and signs off on the plan. No automated food redistribution or supplier purchasing is committed without human authorization.
-8. **Measure:** Post-service scale logs document actual preparation waste, plate waste, and unserved portions.
-9. **Learn:** Historical accuracy informs future variance buffers and ordering thresholds.
+| Architecture Tier | Resource Identifier | Cloud Region | Configuration & Purpose |
+| :--- | :--- | :--- | :--- |
+| **Edge CDN** | `project-698b49f2-0692-4677-948.web.app` | Global Edge | Serves production single-page application with `no-cache` directives for `index.html` to eliminate stale browser caching. Rewrites `/api/**` to Cloud Run. |
+| **Serverless Compute** | `stillgood-backend` | `asia-south1` (Mumbai) | Python 3.13 / FastAPI running in Google Cloud Run. Scale-to-zero (`min-instances: 0`, \$0 idle cost), `max-instances: 3`, concurrency 80. |
+| **Foundation AI Model**| `gemini-2.5-flash` | `asia-south1` | Google Vertex AI invoked via official `google-genai` SDK using IAM Default Compute Service Account credentials (`roles/aiplatform.user`). |
+| **NoSQL Persistence** | `(default)` database | `asia-south1` (Mumbai) | Cloud Firestore in Native Mode. Manages persistent kitchen profiles, versioned policies, operational facts, customer orders, and transaction audit logs. |
+| **Container Registry** | `stillgood-repo` | `asia-south1` | Google Artifact Registry Docker repository storing versioned container builds. |
+| **Identity & IAM** | `518727782721-compute@developer.gserviceaccount.com` | Global | Bound to `roles/datastore.user`, `roles/aiplatform.user`, `roles/artifactregistry.writer`, and `roles/storage.admin`. |
 
 ---
 
-## 4. Division of Responsibility: AI vs Deterministic Code
+## 5. Subsystem Deep-Dive
 
-| Function | Responsible Subsystem | Rationale |
-| :--- | :--- | :--- |
-| Natural language disruption understanding | Gemini 2.5 Flash | Translates messy human voice/text into structured typed parameters |
-| Menu document & slip OCR | Gemini 2.5 Vision | Extracts handwritten notes, delivery times, and items from photos |
-| Candidate recipe pairings | Gemini 2.5 Flash | Proposes creative substitutions using *only approved recipes* |
-| Unit conversion & recipe scaling | Deterministic Python Engine | Exact arithmetic; zero hallucination |
-| Inventory allocation | Deterministic FEFO Allocator | Allocates earliest-expiring eligible batches first |
-| Food safety quarantine gate | Deterministic Safety Gate | Permanently blocks quarantined or expired inventory |
-| Supplier cutoff verification | Deterministic Validator | Compares service window times against supplier ETA |
-| Purchasing calculation | Deterministic Engine | Applies pack-size and minimum order quantity math |
-| Decision commitment | Human Kitchen Manager | Protects kitchen accountability and operational safety |
+### A. Dynamic Kitchen Context & Disruptions
+- **Persistent Policies:** Versioned policies (recipes, capacity, dietary rules, safety protocol) stored per kitchen.
+- **Operational Facts:** Dynamic counters (confirmed bookings, walk-ins recorded at the host stand, batches currently holding in warming wells).
+- **Temporary Disruptions:** Tracked with unique IDs, start/end timestamps, confirmation status, and verified supplier details.
+
+### B. Menu-Based Demand Planning (Plan My Food)
+- **Service Models:** Distinguishes between **À la Carte** (cook-to-order), **Buffet** (batch replenishment), **Fixed-Menu** (attendance-driven), and **Quick-Service**.
+- **Dining Realism:** Accounts for appetizers, mains, shared desserts (with fractional sharing factors like 1.5 diners/dish), and attach rates.
+- **Three-Tier Decision Output:**
+  1. *Ingredients Needed:* Total raw ingredients required for the forecast.
+  2. *Preparation Needed:* Mise-en-place components that can be staged cold in advance.
+  3. *Cook Now:* Strict ticket-justified portions to cook immediately minus batches already safe in holding wells.
+
+### C. Atomic Rescue Combos & Anti-Overselling
+- **Safety Gate:** Food items must pass customer contact checks (unserved behind pass) and thermal holding checks ($\ge 63.0^\circ\text{C}$ hot, $\le 5.0^\circ\text{C}$ cold).
+- **Transactional Atomicity:** When a customer orders a discounted rescue combo:
+  ```
+  Target Combo Available Quantity  ──► Decremented Atomically
+  Component Batch Portions Held    ──► Decremented Atomically
+  Audit Transaction TX-SG-*        ──► Committed to Firestore
+  Excess Orders (Requested > Stock)──► Rejected with HTTP 400 Bad Request
+  ```
 
 ---
 
-## 5. Food Safety and Quarantine Architecture
-STILLGOOD adheres to strict food safety protocols:
-- **Eligible Stock:** Fresh, unexpired batches within temperature thresholds.
-- **At-Risk Stock:** Approaching shelf-life expiration (e.g. 24–48 hours); given highest FEFO priority for immediate cooking.
-- **Ineligible / Quarantined Stock:** Temperature abuse, damaged packaging, or recall notices trigger immediate exclusion. The system actively logs rejected batches and prevents them from appearing in any recipe allocation.
+## 6. How It Works in Plain Language (Layman's Guide)
+
+1. **For the Kitchen Chef:**  
+   The kitchen doesn't have to guess how many meals to cook. When 70 guests are booked, STILLGOOD analyzes previous sales to predict exactly which dishes people will order. It looks in the kitchen's warm holding wells and says:  
+   *"You already have 25 portions of Pomodoro soup hot and ready. Do not cook any more. Only fire 2 Fettuccine Alfredo right now for Table 4."* This keeps food hot, freshly cooked, and eliminates kitchen trash at the end of the shift.
+
+2. **For Sudden Emergencies (Disruptions):**  
+   If a supplier calls to say strawberries are ruined, the chef simply speaks or types: *"Strawberries delayed for 5 days."* Gemini automatically identifies all recipes using strawberries, switches the menu to alternative approved desserts, and calculates how to rebalance prep portions—all with one click of manager approval.
+
+3. **For Diners & Sustainability:**  
+   High-quality, freshly prepared food that remains unserved behind the pass is bundled into discounted **Rescue Combos** (e.g. 35% off lunch duet). Diners get chef-crafted meals at a discount, the restaurant recovers revenue, and verified plate waste drops to zero.
