@@ -1,4 +1,5 @@
 import copy
+import os
 import logging
 from typing import Dict, List, Optional, Any
 from app.models.schemas import (
@@ -30,7 +31,29 @@ class KitchenDatabase:
     """
 
     def __init__(self):
+        self.firestore_client = None
+        self._init_firestore()
         self.reset_to_demo()
+
+    def _init_firestore(self):
+        project_id = os.getenv("GOOGLE_CLOUD_PROJECT") or os.getenv("GCP_PROJECT")
+        if project_id:
+            try:
+                from google.cloud import firestore
+                self.firestore_client = firestore.Client(project=project_id, database="(default)")
+                logger.info(f"Initialized Cloud Firestore client for project '{project_id}'.")
+            except Exception as e:
+                logger.warning(f"Could not connect to Cloud Firestore ({e}). Using in-memory store.")
+                self.firestore_client = None
+
+    def _sync_firestore_doc(self, collection: str, doc_id: str, data: Any):
+        if not self.firestore_client:
+            return
+        try:
+            doc_data = data.model_dump() if hasattr(data, "model_dump") else (data.dict() if hasattr(data, "dict") else data)
+            self.firestore_client.collection(collection).document(str(doc_id)).set(doc_data, merge=True)
+        except Exception as e:
+            logger.debug(f"Firestore sync notice for {collection}/{doc_id}: {e}")
 
     def reset_to_demo(self):
         """Resets database state to initial clean hackathon demonstration state."""
@@ -359,6 +382,7 @@ class KitchenDatabase:
         if existing:
             self.combos[combo.kitchen_id].remove(existing[0])
         self.combos[combo.kitchen_id].insert(0, combo)
+        self._sync_firestore_doc("combos", combo.combo_id, combo)
         return combo
 
     # Transactional Offer Order (Atomic decrement to prevent overselling)
@@ -408,6 +432,8 @@ class KitchenDatabase:
             "status": "COLLECTED"
         }
         self.offer_transactions.append(tx_record)
+        self._sync_firestore_doc("offer_transactions", tx_id, tx_record)
+        self._sync_firestore_doc("combos", combo_id, target_combo)
 
         return {
             "success": True,
@@ -739,6 +765,7 @@ class KitchenDatabase:
                 existing.is_active):
                 return existing
         self.disruptions[disruption.kitchen_id].append(disruption)
+        self._sync_firestore_doc("disruptions", disruption.id, disruption)
         return disruption
 
     def confirm_disruption(self, req: ConfirmDisruptionRequest) -> TemporaryDisruption:
@@ -775,6 +802,7 @@ class KitchenDatabase:
             target_disruption.is_active = False
             target_disruption.last_updated = now_str
 
+        self._sync_firestore_doc("disruptions", target_disruption.id, target_disruption)
         return target_disruption
 
     def resolve_disruption(self, req: ResolveDisruptionRequest) -> TemporaryDisruption:
@@ -803,6 +831,7 @@ class KitchenDatabase:
                     b.remaining_qty = req.stock_replenished_qty
                     b.notes = f"Restocked via resolution of {target_disruption.id}"
 
+        self._sync_firestore_doc("disruptions", target_disruption.id, target_disruption)
         return target_disruption
 
     # ==========================================
@@ -865,6 +894,7 @@ class KitchenDatabase:
         if order.kitchen_id not in self.customer_orders:
             self.customer_orders[order.kitchen_id] = []
         self.customer_orders[order.kitchen_id].insert(0, order)
+        self._sync_firestore_doc("customer_orders", order.order_id, order)
         return order
 
     def cancel_customer_order(self, kitchen_id: str, order_id: str) -> Optional[ConfirmedCustomerOrder]:
@@ -872,6 +902,7 @@ class KitchenDatabase:
         for order in orders:
             if order.order_id == order_id:
                 order.status = "CANCELLED"
+                self._sync_firestore_doc("customer_orders", order.order_id, order)
                 return order
         return None
 

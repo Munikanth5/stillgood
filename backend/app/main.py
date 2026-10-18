@@ -1,5 +1,8 @@
+import os
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from typing import List, Dict, Any, Optional
 
 from app.models.schemas import (
@@ -423,5 +426,28 @@ def get_menu_preparation_plan(kitchen_id: str, expected_guests: Optional[int] = 
         walkin_guests=walkin_g,
         service_period=kitchen.default_service_period
     )
+
+# Static Frontend SPA Serving (Cloud Run unified deployment)
+static_dir = os.path.join(os.path.dirname(__file__), "..", "static")
+if os.path.exists(static_dir):
+    assets_dir = os.path.join(static_dir, "assets")
+    if os.path.exists(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+    @app.get("/{full_path:path}")
+    def serve_frontend_spa(full_path: str):
+        if full_path.startswith("api") or full_path.startswith("docs") or full_path.startswith("openapi.json"):
+            raise HTTPException(status_code=404, detail="API route not found")
+        
+        # Check if requesting a direct static file in static_dir (e.g. vite.svg, favicon)
+        target_file = os.path.join(static_dir, full_path)
+        if full_path and os.path.isfile(target_file):
+            return FileResponse(target_file)
+        
+        index_file = os.path.join(static_dir, "index.html")
+        if os.path.isfile(index_file):
+            return FileResponse(index_file)
+        raise HTTPException(status_code=404, detail="Frontend build not found")
+
 
 
