@@ -308,6 +308,25 @@ class RescuePlanner:
             plan_c.two_stage_prep = two_stage
             plan_c.reservation_breakdown = reservation_split
 
+            # Attach realistic menu-based demand & preparation intelligence
+            from app.engine.menu_demand_predictor import MenuDemandPredictor
+            active_orders = db.get_customer_orders(self.kitchen.id)
+            active_disruptions = db.get_disruptions(self.kitchen.id, active_only=True)
+            prep_batches = db.get_prepared_batches(self.kitchen.id)
+            menu_plan = MenuDemandPredictor.generate_menu_plan(
+                kitchen=self.kitchen,
+                recipes=self.recipes,
+                inventory=self.inventory,
+                prepared_batches=prep_batches,
+                customer_orders=active_orders,
+                disruptions=active_disruptions,
+                expected_guests=target,
+                confirmed_guests=reservation_split.get("confirmed_reservations", target),
+                walkin_guests=reservation_split.get("predicted_walkins", 0),
+                service_period="Dinner Service"
+            )
+            plan_c.menu_preparation_plan = menu_plan.model_dump()
+
             # Rejected Candidates for Restaurant
             rej_verde_1 = self.evaluate_plan_items(
                 plan_id="rej_verde_overprep",
@@ -536,6 +555,23 @@ class RescuePlanner:
             why_gemini_suggested=plan_c_why,
             is_recommended=True
         )
+
+        from app.engine.menu_demand_predictor import MenuDemandPredictor
+        active_orders = db.get_customer_orders(self.kitchen.id)
+        prep_batches = db.get_prepared_batches(self.kitchen.id)
+        menu_plan = MenuDemandPredictor.generate_menu_plan(
+            kitchen=self.kitchen,
+            recipes=self.recipes,
+            inventory=self.inventory,
+            prepared_batches=prep_batches,
+            customer_orders=active_orders,
+            disruptions=active_disruptions,
+            expected_guests=scenario.revised_expected_meals,
+            confirmed_guests=int(scenario.revised_expected_meals * 0.7),
+            walkin_guests=int(scenario.revised_expected_meals * 0.3),
+            service_period=self.kitchen.default_service_period
+        )
+        plan_c.menu_preparation_plan = menu_plan.model_dump()
 
         # --- CANDIDATE #4: Explicitly Rejected Candidate (Supplier Cutoff Breach) ---
         rejected_cand_1_items = [

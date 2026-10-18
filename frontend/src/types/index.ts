@@ -191,6 +191,7 @@ export interface PlanEvaluation {
     predicted_walkins: number;
     total_target: number;
   };
+  menu_preparation_plan?: MenuPreparationPlan;
 }
 
 export interface EvidenceReceipt {
@@ -564,5 +565,94 @@ export interface KitchenContext {
   operational_facts: KitchenOperationalFacts;
   active_disruptions: TemporaryDisruption[];
   past_disruptions: TemporaryDisruption[];
+}
+
+// ==========================================
+// MENU-BASED DEMAND & CUSTOMER ORDERS
+// ==========================================
+
+export interface CustomerOrderItem {
+  recipe_id: string;
+  recipe_name: string;
+  quantity: number;
+  notes?: string;
+}
+
+export interface ConfirmedCustomerOrder {
+  order_id: string;
+  kitchen_id: string;
+  table_number?: string;
+  party_size: number;
+  timestamp: string;
+  status: string;
+  items: CustomerOrderItem[];
+  server_name?: string;
+}
+
+export interface CreateCustomerOrderRequest {
+  table_number?: string;
+  party_size: number;
+  items: CustomerOrderItem[];
+  server_name?: string;
+}
+
+export interface MenuItemPreparationItem {
+  recipe_id: string;
+  recipe_name: string;
+  category: string;
+  portion_size_grams: number;
+  base_prep_time_minutes: number;
+  attach_rate_per_guest: number;
+  is_shared_dish: boolean;
+  sharing_factor: number;
+  expected_dish_demand: number;
+  confirmed_order_portions: number;
+  already_prepared_portions: number;
+  remaining_demand_portions: number;
+  cook_now_portions: number;
+  preparation_needed: string;
+  ingredients_needed: Array<{
+    ingredient_id: string;
+    ingredient_name: string;
+    quantity_required: number;
+    unit: string;
+  }>;
+  operational_action_advice: string;
+  status: string;
+  is_disrupted: boolean;
+}
+
+export interface MenuPreparationPlan {
+  kitchen_id: string;
+  kitchen_name: string;
+  service_model: 'a_la_carte' | 'buffet' | 'fixed_menu' | 'quick_service';
+  service_model_label: string;
+  service_period: string;
+  expected_guests: number;
+  confirmed_guests: number;
+  walkin_guests: number;
+  total_confirmed_orders_count: number;
+  total_dishes_ordered_count: number;
+  menu_items: MenuItemPreparationItem[];
+  cook_now_summary: Array<{
+    recipe_id: string;
+    recipe_name: string;
+    cook_now_portions: number;
+    category: string;
+    reason: string;
+  }>;
+  prep_needed_summary: string[];
+  ingredients_needed_summary: Array<{
+    ingredient_id: string;
+    ingredient_name: string;
+    quantity_required: number;
+    unit: string;
+  }>;
+  recommended_next_action: string;
+  why_this_works_explanation: string;
+  assumptions_breakdown: string[];
+  data_confidence: string;
+  data_source_label: string;
+  is_synthetic: boolean;
 }
 

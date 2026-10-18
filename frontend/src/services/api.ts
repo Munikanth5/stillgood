@@ -5,7 +5,8 @@ import {
   KitchenCompanionSummary, PreparedFoodBatch, PreparedFoodIntakeRequest,
   WalkinForecastResult, WalkinEvent, MealComboProposal,
   MealOfferOrderRequest, MealOfferOrderResult,
-  KitchenContext, TemporaryDisruption, DisruptionProposalResponse
+  KitchenContext, TemporaryDisruption, DisruptionProposalResponse,
+  ConfirmedCustomerOrder, CreateCustomerOrderRequest, MenuPreparationPlan
 } from '../types';
 
 const API_BASE = '/api';
@@ -361,6 +362,39 @@ export async function recordDonation(kitchenId: string, payload: {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || 'Failed to complete donation handover');
   }
+  return res.json();
+}
+
+// --- Menu-Based Demand & Confirmed Customer Orders (Plan My Food) ---
+export async function fetchCustomerOrders(kitchenId: string, status?: string): Promise<ConfirmedCustomerOrder[]> {
+  const query = status ? `?status=${encodeURIComponent(status)}` : '';
+  const res = await fetch(`${API_BASE}/kitchens/${kitchenId}/orders${query}`);
+  if (!res.ok) throw new Error('Failed to fetch customer orders');
+  return res.json();
+}
+
+export async function recordCustomerOrder(kitchenId: string, req: CreateCustomerOrderRequest): Promise<ConfirmedCustomerOrder> {
+  const res = await fetch(`${API_BASE}/kitchens/${kitchenId}/orders`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  });
+  if (!res.ok) throw new Error('Failed to record customer order');
+  return res.json();
+}
+
+export async function cancelCustomerOrder(kitchenId: string, orderId: string): Promise<ConfirmedCustomerOrder> {
+  const res = await fetch(`${API_BASE}/kitchens/${kitchenId}/orders/${orderId}/cancel`, {
+    method: 'POST',
+  });
+  if (!res.ok) throw new Error('Failed to cancel customer order');
+  return res.json();
+}
+
+export async function fetchMenuPlan(kitchenId: string, expectedGuests?: number): Promise<MenuPreparationPlan> {
+  const query = expectedGuests ? `?expected_guests=${expectedGuests}` : '';
+  const res = await fetch(`${API_BASE}/kitchens/${kitchenId}/menu-plan${query}`);
+  if (!res.ok) throw new Error('Failed to fetch menu preparation plan');
   return res.json();
 }
 

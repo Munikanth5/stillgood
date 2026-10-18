@@ -9,7 +9,8 @@ from app.models.schemas import (
     ActualOutcomeLog, ImpactDashboardMetrics,
     KitchenContext, TemporaryDisruption, DisruptionProposalResponse,
     ConfirmDisruptionRequest, ResolveDisruptionRequest,
-    RecordDisposalRequest, RecordDonationRequest
+    RecordDisposalRequest, RecordDonationRequest,
+    ConfirmedCustomerOrder, CreateCustomerOrderRequest, MenuPreparationPlan
 )
 from app.core.database import db
 from app.ai.gemini_client import gemini_service
@@ -364,5 +365,63 @@ def record_donation(kitchen_id: str, req: RecordDonationRequest):
         return db.record_donation(req)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+# --- 7. Menu-Based Demand & Confirmed Customer Orders (Plan My Food) ---
+@app.get("/api/kitchens/{kitchen_id}/orders", response_model=List[ConfirmedCustomerOrder])
+def get_customer_orders(kitchen_id: str, status: Optional[str] = None):
+    return db.get_customer_orders(kitchen_id, status=status)
+
+@app.post("/api/kitchens/{kitchen_id}/orders", response_model=ConfirmedCustomerOrder)
+def create_customer_order(kitchen_id: str, req: CreateCustomerOrderRequest):
+    import time
+    from datetime import datetime, timezone
+    order_id = f"ORD-{kitchen_id[-3:].upper()}-{int(time.time() * 1000) % 10000}"
+    order = ConfirmedCustomerOrder(
+        order_id=order_id,
+        kitchen_id=kitchen_id,
+        table_number=req.table_number or "Table 1",
+        party_size=req.party_size,
+        timestamp=datetime.now(timezone.utc).strftime("%H:%M UTC"),
+        status="CONFIRMED",
+        items=req.items,
+        server_name=req.server_name or "Staff"
+    )
+    return db.record_customer_order(order)
+
+@app.post("/api/kitchens/{kitchen_id}/orders/{order_id}/cancel", response_model=ConfirmedCustomerOrder)
+def cancel_customer_order(kitchen_id: str, order_id: str):
+    order = db.cancel_customer_order(kitchen_id, order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    return order
+
+@app.get("/api/kitchens/{kitchen_id}/menu-plan", response_model=MenuPreparationPlan)
+def get_menu_preparation_plan(kitchen_id: str, expected_guests: Optional[int] = None):
+    kitchen = db.get_kitchen(kitchen_id)
+    if not kitchen:
+        raise HTTPException(status_code=404, detail="Kitchen not found")
+    from app.engine.menu_demand_predictor import MenuDemandPredictor
+    recipes = db.get_recipes(kitchen_id)
+    inventory = db.get_inventory(kitchen_id)
+    prepared_batches = db.get_prepared_batches(kitchen_id)
+    orders = db.get_customer_orders(kitchen_id)
+    disruptions = db.get_disruptions(kitchen_id, active_only=True)
+    
+    guests = expected_guests or (70 if "verde" in kitchen_id else 500)
+    confirmed_g = int(guests * 0.65)
+    walkin_g = guests - confirmed_g
+
+    return MenuDemandPredictor.generate_menu_plan(
+        kitchen=kitchen,
+        recipes=recipes,
+        inventory=inventory,
+        prepared_batches=prepared_batches,
+        customer_orders=orders,
+        disruptions=disruptions,
+        expected_guests=guests,
+        confirmed_guests=confirmed_g,
+        walkin_guests=walkin_g,
+        service_period=kitchen.default_service_period
+    )
 
 

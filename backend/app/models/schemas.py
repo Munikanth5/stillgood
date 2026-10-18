@@ -41,6 +41,12 @@ class BatchEligibility(str, Enum):
     AT_RISK = "at_risk"  # Eligible but expires within 24-48 hrs, high priority to use
     INELIGIBLE = "ineligible"  # Expired, spoiled, or quarantined
 
+class ServiceModel(str, Enum):
+    A_LA_CARTE = "a_la_carte"
+    BUFFET = "buffet"
+    FIXED_MENU = "fixed_menu"
+    QUICK_SERVICE = "quick_service"
+
 class KitchenProfile(BaseModel):
     id: str
     name: str
@@ -59,6 +65,20 @@ class KitchenProfile(BaseModel):
     menu_type: str = "Fixed Printed Menu"
     stage_1_prep_label: str = "Stage 1: Pre-Service Hot Prep (Cook before doors open)"
     stage_2_prep_label: str = "Stage 2: Quick-Fire Cold Reserve (Portioned in cooler for walk-ins)"
+    service_model: Optional[ServiceModel] = None
+
+    @property
+    def effective_service_model(self) -> ServiceModel:
+        if self.service_model:
+            return self.service_model
+        if self.type == KitchenType.RESTAURANT_CAFE or "verde" in self.id or "restaurant" in self.id:
+            return ServiceModel.A_LA_CARTE
+        elif self.type == KitchenType.HOTEL_BUFFET:
+            return ServiceModel.BUFFET
+        elif self.type == KitchenType.FACTORY_INDUSTRIAL:
+            return ServiceModel.QUICK_SERVICE
+        else:
+            return ServiceModel.FIXED_MENU
 
 class Ingredient(BaseModel):
     id: str
@@ -183,6 +203,90 @@ class PlanEvaluation(BaseModel):
     why_gemini_suggested: Optional[str] = None
     two_stage_prep: Optional[Dict[str, Any]] = None
     reservation_breakdown: Optional[Dict[str, Any]] = None
+    menu_preparation_plan: Optional[Dict[str, Any]] = None
+
+# ==========================================
+# MENU-BASED DEMAND & CUSTOMER ORDERS
+# ==========================================
+
+class CustomerOrderItem(BaseModel):
+    recipe_id: str
+    recipe_name: str
+    quantity: int = 1
+    notes: Optional[str] = None
+
+class ConfirmedCustomerOrder(BaseModel):
+    order_id: str
+    kitchen_id: str
+    table_number: Optional[str] = None
+    party_size: int = 2
+    timestamp: str
+    status: str = "CONFIRMED"  # CONFIRMED, PREPARING, COMPLETED, CANCELLED
+    items: List[CustomerOrderItem] = []
+    server_name: Optional[str] = "Host Stand"
+
+class CreateCustomerOrderRequest(BaseModel):
+    table_number: Optional[str] = "Table 1"
+    party_size: int = 2
+    items: List[CustomerOrderItem]
+    server_name: Optional[str] = "Staff"
+
+class MenuItemPreparationItem(BaseModel):
+    recipe_id: str
+    recipe_name: str
+    category: str = "main"  # main, side, soup, salad, dessert
+    portion_size_grams: int = 250
+    base_prep_time_minutes: int = 15
+    attach_rate_per_guest: float = 0.50
+    is_shared_dish: bool = False
+    sharing_factor: float = 1.0  # portions per guest (e.g. 0.5 for 2-guest shared dish)
+
+    # 1. Demand & Order Breakdown (Requirement 3)
+    expected_dish_demand: int
+    confirmed_order_portions: int
+    already_prepared_portions: int
+    remaining_demand_portions: int
+
+    # 2. Three Chef Decisions (Requirement 4)
+    cook_now_portions: int
+    preparation_needed: str
+    ingredients_needed: List[Dict[str, Any]] = []
+
+    # Operational Guidance & Status
+    operational_action_advice: str
+    status: str = "ACTIVE"  # ACTIVE, 86_DISRUPTED, LOW_STOCK
+    is_disrupted: bool = False
+
+class MenuPreparationPlan(BaseModel):
+    kitchen_id: str
+    kitchen_name: str
+    service_model: str  # a_la_carte, buffet, fixed_menu, quick_service
+    service_model_label: str
+    service_period: str
+    expected_guests: int
+    confirmed_guests: int
+    walkin_guests: int
+    total_confirmed_orders_count: int
+    total_dishes_ordered_count: int
+
+    menu_items: List[MenuItemPreparationItem] = []
+
+    # Three Key Chef Decision Summaries (Requirement 4)
+    cook_now_summary: List[Dict[str, Any]] = []
+    prep_needed_summary: List[str] = []
+    ingredients_needed_summary: List[Dict[str, Any]] = []
+
+    # Next Single Primary Action (Requirement 5)
+    recommended_next_action: str
+
+    # Why this works (Calculations & Assumptions - Requirement 5)
+    why_this_works_explanation: str
+    assumptions_breakdown: List[str] = []
+
+    # Data Confidence & Labels (Requirement 3)
+    data_confidence: str = "HIGH_HISTORICAL"  # HIGH_HISTORICAL, BASELINE_STATISTICAL, LOW_SYNTHETIC
+    data_source_label: str = "POS Sales History + Live Order Tickets"
+    is_synthetic: bool = False
 
 class EvidenceReceipt(BaseModel):
     receipt_id: str

@@ -11,7 +11,7 @@ from app.models.schemas import (
     PreparedFoodBatch, PreparedFoodStatus, SafetyDecision,
     RecommendedRescueAction, SafetyRuleCheck, DietaryTag,
     MealComboProposal, ComboPriceOption, AttentionItem, KitchenCompanionSummary,
-    WalkinEvent, BatchEligibility, BatchStorageStatus
+    WalkinEvent, BatchEligibility, BatchStorageStatus, ConfirmedCustomerOrder, CustomerOrderItem, ServiceModel
 )
 from app.data.seed_data import (
     KITCHEN_PROFILES, APEX_INGREDIENTS, APEX_INVENTORY,
@@ -286,6 +286,54 @@ class KitchenDatabase:
             "kitchen_corporate_apex": []
         }
         self.offer_transactions: List[Dict[str, Any]] = []
+
+        # Seed Confirmed Customer Orders for realistic menu-based demand
+        self.customer_orders: Dict[str, List[ConfirmedCustomerOrder]] = {
+            "kitchen_restaurant_verde": [
+                ConfirmedCustomerOrder(
+                    order_id="ORD-VRD-101",
+                    kitchen_id="kitchen_restaurant_verde",
+                    table_number="Table 4",
+                    party_size=4,
+                    timestamp="19:15 UTC",
+                    status="CONFIRMED",
+                    server_name="Marco (Front Station)",
+                    items=[
+                        CustomerOrderItem(recipe_id="recipe_verde_pomodoro", recipe_name="Rustic Tomato Pomodoro Penne", quantity=2),
+                        CustomerOrderItem(recipe_id="recipe_verde_alfredo", recipe_name="Creamy Garlic Fettuccine Alfredo", quantity=1),
+                        CustomerOrderItem(recipe_id="recipe_verde_salad", recipe_name="Strawberry & Baby Spinach Salad", quantity=1, notes="Shared appetizer")
+                    ]
+                ),
+                ConfirmedCustomerOrder(
+                    order_id="ORD-VRD-102",
+                    kitchen_id="kitchen_restaurant_verde",
+                    table_number="Table 2",
+                    party_size=2,
+                    timestamp="19:22 UTC",
+                    status="CONFIRMED",
+                    server_name="Elena (Terrace)",
+                    items=[
+                        CustomerOrderItem(recipe_id="recipe_verde_alfredo", recipe_name="Creamy Garlic Fettuccine Alfredo", quantity=1),
+                        CustomerOrderItem(recipe_id="recipe_verde_soup", recipe_name="Tuscan Tomato Basil Soup", quantity=1),
+                        CustomerOrderItem(recipe_id="recipe_verde_pomodoro", recipe_name="Rustic Tomato Pomodoro Penne", quantity=1)
+                    ]
+                ),
+                ConfirmedCustomerOrder(
+                    order_id="ORD-VRD-103",
+                    kitchen_id="kitchen_restaurant_verde",
+                    table_number="Table 7",
+                    party_size=2,
+                    timestamp="19:30 UTC",
+                    status="CONFIRMED",
+                    server_name="Marco (Front Station)",
+                    items=[
+                        CustomerOrderItem(recipe_id="recipe_verde_pomodoro", recipe_name="Rustic Tomato Pomodoro Penne", quantity=2),
+                        CustomerOrderItem(recipe_id="recipe_verde_dessert", recipe_name="Strawberries & Hand-Whipped Vanilla Cream", quantity=1, notes="Pre-ordered dessert")
+                    ]
+                )
+            ],
+            "kitchen_corporate_apex": []
+        }
 
         logger.info("KitchenDatabase reset to verified demo state with STILLGOOD 3.0 extensions.")
 
@@ -802,6 +850,30 @@ class KitchenDatabase:
         target_batch.status = PreparedFoodStatus.OUTCOME_VERIFIED if target_batch.portions_remaining == 0 else PreparedFoodStatus.ELIGIBLE_DONATION
         target_batch.notes = f"Donated {donated_qty} portions to authorized partner {req.partner_name} at {req.transport_temp_c}°C transport temp"
         return target_batch
+
+    # ==========================================
+    # CONFIRMED CUSTOMER ORDERS & MENU PLANNING
+    # ==========================================
+
+    def get_customer_orders(self, kitchen_id: str, status: Optional[str] = None) -> List[ConfirmedCustomerOrder]:
+        orders = self.customer_orders.get(kitchen_id, [])
+        if status:
+            return [o for o in orders if o.status.upper() == status.upper()]
+        return orders
+
+    def record_customer_order(self, order: ConfirmedCustomerOrder) -> ConfirmedCustomerOrder:
+        if order.kitchen_id not in self.customer_orders:
+            self.customer_orders[order.kitchen_id] = []
+        self.customer_orders[order.kitchen_id].insert(0, order)
+        return order
+
+    def cancel_customer_order(self, kitchen_id: str, order_id: str) -> Optional[ConfirmedCustomerOrder]:
+        orders = self.customer_orders.get(kitchen_id, [])
+        for order in orders:
+            if order.order_id == order_id:
+                order.status = "CANCELLED"
+                return order
+        return None
 
 # Global singleton
 db = KitchenDatabase()
