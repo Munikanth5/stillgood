@@ -36,7 +36,21 @@ $$\text{Understand} \longrightarrow \text{Forecast} \longrightarrow \text{Simula
 
 ---
 
-## 3. Technology Stack
+## 3. Visual Overview & Screenshots
+
+| 1. Real-Time Attention Cards & Triage | 2. NLP Disruption & Dietary Rules |
+| :---: | :---: |
+| ![Attention Cards](docs/screenshots/01-kitchen-companion-attention.png) | ![NLP Disruption](docs/screenshots/02-plan-my-food-nlp-disruption.png) |
+| *Live triage of walk-in surges, safe surplus rescue, and stock alerts with interactive "Take Action" triggers.* | *Natural-language disruption entry ("strawberries out of stock for 5 days") with FEFO prioritization.* |
+
+| 3. Feasible Replanning & Verifiable Evidence Receipts |
+| :---: |
+| ![Plan My Food Recommendation](docs/screenshots/03-plan-my-food-recommendation-evidence.png) |
+| *Service meal comparison (-115 fewer meals to prevent over-prep), dish portions, and manager approval gate.* |
+
+---
+
+## 4. Technology Stack
 
 - **Frontend:** React 18, TypeScript, Vite, Tailwind CSS, Lucide Icons, Recharts
 - **Backend:** Python 3.13, FastAPI, Pydantic v2, Uvicorn
@@ -46,7 +60,7 @@ $$\text{Understand} \longrightarrow \text{Forecast} \longrightarrow \text{Simula
 
 ---
 
-## 4. Prerequisites
+## 5. Prerequisites
 
 - **Python:** 3.11+ (Tested on Python 3.13)
 - **Node.js:** 18+ (Tested on Node 20 / 25)
@@ -55,7 +69,7 @@ $$\text{Understand} \longrightarrow \text{Forecast} \longrightarrow \text{Simula
 
 ---
 
-## 5. Local Setup & Startup Instructions
+## 6. Local Setup & Startup Instructions
 
 ### Clone / Navigate to Project Directory
 ```bash
@@ -93,7 +107,7 @@ docker-compose up --build
 
 ---
 
-## 6. Running Automated Tests
+## 7. Running Automated Tests
 
 Run the backend verification suite (mathematical engine, FEFO allocation, constraint checks, and API integration):
 ```bash
@@ -108,7 +122,7 @@ npm run build
 
 ---
 
-## 7. Signature Kitchen Walkthrough Scenario
+## 8. Signature Kitchen Walkthrough Scenario
 
 Follow this walkthrough to reproduce the core operational demonstration:
 
@@ -126,7 +140,7 @@ Follow this walkthrough to reproduce the core operational demonstration:
 
 ---
 
-## 8. Documentation Sitemap
+## 9. Documentation Sitemap
 
 - [Production Deployment Report](docs/DEPLOYMENT_REPORT.md)
 - [Production Verification Runbook](docs/PRODUCTION_VERIFICATION.md)
@@ -138,7 +152,7 @@ Follow this walkthrough to reproduce the core operational demonstration:
 
 ---
 
-## 9. Known Limitations & Future Roadmap
+## 10. Known Limitations & Future Roadmap
 
 - **BigQuery ML Forecasting:** Baseline uses day-matching Bayesian estimates; full BigQuery ML integration is planned for P2.
 - **POS Direct Sync:** Currently accepts CSV and manual outcome logs; direct Toast / Square API webhooks on roadmap.
@@ -146,5 +160,5 @@ Follow this walkthrough to reproduce the core operational demonstration:
 
 ---
 
-## 10. License
+## 11. License
 Built for the **Google AI Builder Cup 2026**. Open source under the Apache 2.0 License.

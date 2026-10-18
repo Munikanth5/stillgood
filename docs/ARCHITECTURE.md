@@ -82,7 +82,35 @@ sequenceDiagram
 
 ---
 
-## 4. Deployed Component Specifications
+## 4. Visual Flow & Application Screenshots
+
+The operational flow can be observed across key touchpoints in the live application:
+
+### Step 1: Real-Time Kitchen Triage & Attention Cards
+Kitchen managers and station chefs see urgent operational anomalies prioritized by urgency, with direct single-click resolution handlers.
+
+![Kitchen Companion Urgent Attention Cards](screenshots/01-kitchen-companion-attention.png)  
+*Figure 1: Live Kitchen Decision Companion highlighting walk-in surges (+35 diners), safe lunch surplus ready for rescue (33 portions), and perishable ingredient alerts with interactive "Take Action" triggers.*
+
+---
+
+### Step 2: Natural Language Disruption Input & Constraint Guardrails
+Chefs describe emergencies in plain words. Vertex AI (Gemini 2.5 Flash) structures the disruption while preserving strict kitchen rules (e.g., minimum guaranteed vegetarian portions, FEFO inventory allocation).
+
+![Plan My Food Disruption Input](screenshots/02-plan-my-food-nlp-disruption.png)  
+*Figure 2: Plain-language disruption entry ("strawberries out of stock not available for next five days") combined with strict dietary constraint guardrails and FEFO stock priority.*
+
+---
+
+### Step 3: Feasible Replanning, Evidence Receipts & Human Approval
+The deterministic engine generates a revised cooking and preparation schedule, visibly explains the difference (-115 fewer meals to prevent over-prep), provides an auditable Evidence Receipt, and requires human manager approval before committing.
+
+![Plan My Food Recommendation & Evidence Receipt](screenshots/03-plan-my-food-recommendation-evidence.png)  
+*Figure 3: Recommended food plan with service meal comparison (220 previously planned vs. 105 recommended now), dish portion breakdown, verifiable evidence receipt, and "Review & Approve Plan" decision gate.*
+
+---
+
+## 5. Deployed Component Specifications
 
 | Architecture Tier | Resource Identifier | Cloud Region | Configuration & Purpose |
 | :--- | :--- | :--- | :--- |
@@ -95,7 +123,7 @@ sequenceDiagram
 
 ---
 
-## 5. Subsystem Deep-Dive
+## 6. Subsystem Deep-Dive
 
 ### A. Dynamic Kitchen Context & Disruptions
 - **Persistent Policies:** Versioned policies (recipes, capacity, dietary rules, safety protocol) stored per kitchen.
@@ -122,7 +150,7 @@ sequenceDiagram
 
 ---
 
-## 6. How It Works in Plain Language (Layman's Guide)
+## 7. How It Works in Plain Language (Layman's Guide)
 
 1. **For the Kitchen Chef:**  
    The kitchen doesn't have to guess how many meals to cook. When 70 guests are booked, STILLGOOD analyzes previous sales to predict exactly which dishes people will order. It looks in the kitchen's warm holding wells and says:  
