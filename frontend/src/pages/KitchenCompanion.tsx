@@ -299,8 +299,17 @@ export const KitchenCompanion: React.FC<KitchenCompanionProps> = ({
               </div>
 
               <div className="mt-4 pt-3 border-t border-subtle/60 flex items-center justify-between text-xs font-semibold text-terracotta">
-                <span>{item.suggested_action || 'Take Action'}</span>
-                <span>&rarr;</span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleAttentionAction(item);
+                  }}
+                  className="w-full flex items-center justify-between text-xs font-semibold text-terracotta hover:text-terracotta-dark focus:outline-none cursor-pointer"
+                >
+                  <span>{item.suggested_action || 'Take Action'}</span>
+                  <span>&rarr;</span>
+                </button>
               </div>
             </div>
           ))}

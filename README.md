@@ -4,6 +4,11 @@
 > **Tagline:** No Meal Left Behind. No Good Food Wasted.  
 > **Mission:** Simultaneously reduce avoidable food waste without compromising meal availability, dietary requirements, or kitchen food safety.
 
+### 🌐 Live Production Deployments
+- **Primary Application (Firebase Hosting CDN):** [https://project-698b49f2-0692-4677-948.web.app](https://project-698b49f2-0692-4677-948.web.app)
+- **Direct Cloud Run Microservice (Mumbai `asia-south1`):** [https://stillgood-backend-518727782721.asia-south1.run.app](https://stillgood-backend-518727782721.asia-south1.run.app)
+- **GitHub Repository:** [https://github.com/Munikanth5/stillgood](https://github.com/Munikanth5/stillgood)
+
 ---
 
 ## 1. Executive Summary
