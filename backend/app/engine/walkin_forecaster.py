@@ -111,9 +111,16 @@ class WalkinDemandForecaster:
 
         # ZERO DOUBLE COUNTING FORMULA:
         # Total Projected Covers = Seated Reservation Attendance + Recorded Walk-ins So Far + Remaining Future Walk-ins Expected
-        total_expected_covers = expected_res_attendance + current_walkin_count + future_walkins_expected
+        baseline_model_covers = expected_res_attendance + current_walkin_count + future_walkins_expected
         low_demand = expected_res_attendance + current_walkin_count + max(0, future_walkins_expected - 8)
         high_demand = min(capacity, expected_res_attendance + current_walkin_count + future_walkins_expected + 12)
+
+        if manager_override is not None and manager_override > 0:
+            total_expected_covers = manager_override
+            override_diff = manager_override - baseline_model_covers
+        else:
+            total_expected_covers = baseline_model_covers
+            override_diff = 0
 
         # 3. Decision recommendation for kitchen prep
         if remaining_capacity < predicted_next_30m:
@@ -140,6 +147,10 @@ class WalkinDemandForecaster:
             f"with {predicted_next_30m} expected in the next 30 minutes ({next_30m_interval[0]}–{next_30m_interval[1]} covers). "
             f"Total projected service volume is {total_expected_covers} covers (within {capacity} capacity)."
         )
+
+        if manager_override is not None and manager_override > 0:
+            diff_sign = "+" if override_diff >= 0 else ""
+            explanation += f" Manager applied manual override to {manager_override} covers ({diff_sign}{override_diff} covers vs statistical baseline of {baseline_model_covers})."
 
         if gemini_service.is_live:
             try:
@@ -171,6 +182,7 @@ class WalkinDemandForecaster:
             predicted_walkins_next_30m=predicted_next_30m,
             walkin_prediction_interval=next_30m_interval,
             total_expected_covers_today=total_expected_covers,
+            baseline_model_covers=baseline_model_covers,
             high_demand_scenario=high_demand,
             low_demand_scenario=low_demand,
             current_recorded_arrivals=current_walkin_count,
@@ -182,6 +194,7 @@ class WalkinDemandForecaster:
             data_sources_connected=data_sources,
             future_walkins_expected=future_walkins_expected,
             manager_override=manager_override,
+            manager_override_difference=override_diff,
             manager_override_reason=manager_override_reason,
             connector_mode="EVALUATED_HISTORICAL_WITH_LIVE_EVENTS" if is_restaurant else "COLD_START_FALLBACK",
             intervals=intervals,

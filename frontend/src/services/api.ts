@@ -217,7 +217,7 @@ export async function fetchWalkinForecast(
 
 export async function recordWalkinEvent(
   kitchenId: string,
-  event: { id?: string; party_size: number; event_type?: string; notes?: string }
+  event: { id?: string; kitchen_id?: string; party_size: number; event_type?: string; notes?: string }
 ): Promise<WalkinEvent> {
   const payload = {
     id: event.id || `EVT-MANUAL-${Date.now()}`,

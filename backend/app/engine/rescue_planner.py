@@ -6,6 +6,7 @@ from app.models.schemas import (
 from app.engine.recipe_calculator import RecipeCalculator
 from app.engine.inventory_allocator import InventoryAllocator
 from app.engine.constraint_validator import ConstraintValidator
+from app.ai.disruption_interpreter import get_ingredient_stems
 
 class RescuePlanner:
     """
@@ -23,6 +24,7 @@ class RescuePlanner:
         suppliers: List[Supplier]
     ):
         self.kitchen = kitchen
+        self.recipes = recipes
         self.recipes_by_id = {r.id: r for r in recipes}
         self.inventory = inventory
         self.ingredients_by_id = {i.id: i for i in ingredients}
@@ -195,43 +197,96 @@ class RescuePlanner:
             active_disruptions = db.get_disruptions(self.kitchen.id, active_only=True)
             active_confirmed = [d for d in active_disruptions if d.confirmation_status.value == "CONFIRMED"]
 
-            has_cream_blocker = (
-                any(d.get("ingredient") == "cream" for d in scenario.supplier_disruptions) or
-                any("cream" in d.affected_name.lower() for d in active_confirmed)
-            )
-            has_strawberry_outage = (
-                "strawberries" in scenario.excluded_ingredients or
-                any("strawberr" in d.get("ingredient", "").lower() and d.get("status") in ["out_of_stock", "delayed"] for d in scenario.supplier_disruptions) or
-                any("strawberr" in d.affected_name.lower() and d.issue_type == "out_of_stock" for d in active_confirmed)
-            )
-            alfredo_portions = 0 if has_cream_blocker else half
-            pomodoro_portions = target if has_cream_blocker else other_half
+            # Dynamic ingredient disruption detection for Osteria Verde & other kitchens
+            disrupted_ingredients = set(scenario.excluded_ingredients)
+            for d in scenario.supplier_disruptions:
+                if d.get("ingredient"):
+                    disrupted_ingredients.add(d["ingredient"].lower())
+            for d in active_confirmed:
+                disrupted_ingredients.add(d.affected_name.lower())
 
-            if has_strawberry_outage:
-                # 86'd strawberries: do not plan strawberry dessert or salad; scale pasta & soup for guests
-                plan_c_verde_items = [
-                    PlanItem(recipe_id="recipe_verde_pomodoro", recipe_name="Rustic Tomato Pomodoro Penne", portions=pomodoro_portions, dietary_tags=[DietaryTag.VEGETARIAN, DietaryTag.VEGAN], cost_per_portion=1.35, total_cost=round(pomodoro_portions * 1.35, 2)),
-                    PlanItem(recipe_id="recipe_verde_soup", recipe_name="Tuscan Tomato Basil Soup", portions=35, dietary_tags=[DietaryTag.VEGAN], cost_per_portion=0.85, total_cost=29.75),
-                ]
-                if not has_cream_blocker:
-                    plan_c_verde_items.insert(0, PlanItem(recipe_id="recipe_verde_alfredo", recipe_name="Creamy Garlic Fettuccine Alfredo", portions=alfredo_portions, dietary_tags=[DietaryTag.VEGETARIAN], cost_per_portion=2.20, total_cost=round(alfredo_portions * 2.20, 2)))
+            # Find all blocked recipes that contain any disrupted ingredient
+            all_disrupted_stems = set()
+            for dis in disrupted_ingredients:
+                for s in get_ingredient_stems(dis):
+                    all_disrupted_stems.add(s)
 
+            blocked_recipe_ids = set()
+            for r in self.recipes:
+                r_name_l = r.name.lower()
+                if any(s in r_name_l for s in all_disrupted_stems):
+                    blocked_recipe_ids.add(r.id)
+                    continue
+                for ing in r.ingredients:
+                    ing_name_l = ing.ingredient_name.lower()
+                    ing_id_l = ing.ingredient_id.lower()
+                    if any(s in ing_name_l or s in ing_id_l for s in all_disrupted_stems):
+                        blocked_recipe_ids.add(r.id)
+                        break
+
+            has_cream_blocker = "recipe_verde_alfredo" in blocked_recipe_ids
+            has_pomodoro_blocker = "recipe_verde_pomodoro" in blocked_recipe_ids
+            has_strawberry_outage = any("strawberr" in s for s in all_disrupted_stems)
+            has_cream_outage = any("cream" in s for s in all_disrupted_stems)
+
+            cream_stock_depleted = any(
+                "cream" in d.affected_name.lower() and getattr(d.confirmation_details, "stock_depleted", False)
+                for d in active_confirmed
+            )
+            can_rescue_strawberries = (
+                not has_strawberry_outage
+                and not cream_stock_depleted
+                and ("strawberries" in [p.lower() for p in scenario.inventory_priorities] or not has_cream_outage)
+            )
+
+            if can_rescue_strawberries:
+                blocked_recipe_ids.discard("recipe_verde_dessert")
+            else:
+                blocked_recipe_ids.add("recipe_verde_dessert")
+
+            # Build dishes dynamically from available eligible recipes
+            plan_c_verde_items = []
+
+            # 1. Main Pasta Courses
+            if not has_cream_blocker and not has_pomodoro_blocker:
+                plan_c_verde_items.append(PlanItem(recipe_id="recipe_verde_alfredo", recipe_name="Creamy Garlic Fettuccine Alfredo", portions=half, dietary_tags=[DietaryTag.VEGETARIAN], cost_per_portion=2.20, total_cost=round(half * 2.20, 2)))
+                plan_c_verde_items.append(PlanItem(recipe_id="recipe_verde_pomodoro", recipe_name="Rustic Tomato Pomodoro Penne", portions=other_half, dietary_tags=[DietaryTag.VEGETARIAN, DietaryTag.VEGAN], cost_per_portion=1.35, total_cost=round(other_half * 1.35, 2)))
+            elif not has_cream_blocker and has_pomodoro_blocker:
+                # Pomodoro 86'd (e.g. tomatoes, basil, garlic outage) -> scale Alfredo to cover all target diners!
+                plan_c_verde_items.append(PlanItem(recipe_id="recipe_verde_alfredo", recipe_name="Creamy Garlic Fettuccine Alfredo", portions=target, dietary_tags=[DietaryTag.VEGETARIAN], cost_per_portion=2.20, total_cost=round(target * 2.20, 2)))
+            elif has_cream_blocker and not has_pomodoro_blocker:
+                # Alfredo 86'd (e.g. cream/dairy outage) -> scale Pomodoro to cover all target diners!
+                plan_c_verde_items.append(PlanItem(recipe_id="recipe_verde_pomodoro", recipe_name="Rustic Tomato Pomodoro Penne", portions=target, dietary_tags=[DietaryTag.VEGETARIAN, DietaryTag.VEGAN], cost_per_portion=1.35, total_cost=round(target * 1.35, 2)))
+            else:
+                # Both pastas blocked -> fallback to Tuscan Tomato Soup or Salad as main
+                if "recipe_verde_soup" not in blocked_recipe_ids:
+                    plan_c_verde_items.append(PlanItem(recipe_id="recipe_verde_soup", recipe_name="Tuscan Tomato Basil Soup", portions=target, dietary_tags=[DietaryTag.VEGAN], cost_per_portion=0.85, total_cost=round(target * 0.85, 2)))
+
+            # 2. Soups & Sides
+            if "recipe_verde_soup" not in blocked_recipe_ids and not any(it.recipe_id == "recipe_verde_soup" for it in plan_c_verde_items):
+                soup_portions = 35 if (has_strawberry_outage or has_cream_blocker or has_pomodoro_blocker) else 25
+                plan_c_verde_items.append(PlanItem(recipe_id="recipe_verde_soup", recipe_name="Tuscan Tomato Basil Soup", portions=soup_portions, dietary_tags=[DietaryTag.VEGAN], cost_per_portion=0.85, total_cost=round(soup_portions * 0.85, 2)))
+
+            # 3. Salad
+            if "recipe_verde_salad" not in blocked_recipe_ids:
+                plan_c_verde_items.append(PlanItem(recipe_id="recipe_verde_salad", recipe_name="Strawberry & Baby Spinach Salad", portions=20, dietary_tags=[DietaryTag.VEGAN], cost_per_portion=0.88, total_cost=17.60))
+
+            # 4. Dessert Special (Features Strawberries & Hand-Whipped Vanilla Cream unless blocked by ingredient outage)
+            if "recipe_verde_dessert" not in blocked_recipe_ids:
+                plan_c_verde_items.append(PlanItem(recipe_id="recipe_verde_dessert", recipe_name="Strawberries & Hand-Whipped Vanilla Cream", portions=50, dietary_tags=[DietaryTag.VEGETARIAN, DietaryTag.GLUTEN_FREE], cost_per_portion=1.15, total_cost=57.50))
+
+            if blocked_recipe_ids:
+                blocked_names = [self.recipes_by_id[rid].name for rid in blocked_recipe_ids if rid in self.recipes_by_id]
+                eligible_names = [item.recipe_name for item in plan_c_verde_items]
+                dis_label = ", ".join(sorted(disrupted_ingredients)) if disrupted_ingredients else "ingredient disruption"
                 plan_c_title = "Choice C: STILLGOOD Out-of-Stock Substitution Plan"
-                plan_c_subtitle = f"86'd all strawberry recipes due to supplier outage; scaled pasta & soup lines for {target} diners."
+                plan_c_subtitle = f"86'd all {dis_label} recipes ({', '.join(blocked_names)}); scaled remaining {', '.join(eligible_names)} lines for {target} diners."
                 plan_c_why = (
-                    f"STILLGOOD identified that fresh strawberries are out of stock for the next 5 days. "
-                    f"All strawberry recipes ('Strawberries & Whipped Cream' and 'Strawberry Salad') were automatically 86'd from tonight's prep sheet. "
-                    f"Prep has been safely reallocated to hearty Tomato Pomodoro penne and Tuscan Tomato soup to satisfy all {target} guests without missing-ingredient service delays."
+                    f"STILLGOOD identified that {dis_label} is out of stock or disrupted for upcoming service. "
+                    f"All affected recipes ({', '.join(blocked_names)}) were automatically 86'd from tonight's prep sheet. "
+                    f"Prep has been safely reallocated to {', '.join(eligible_names)} to satisfy all {target} guests without missing-ingredient service delays."
                 )
             else:
-                plan_c_verde_items = [
-                    PlanItem(recipe_id="recipe_verde_pomodoro", recipe_name="Rustic Tomato Pomodoro Penne", portions=pomodoro_portions, dietary_tags=[DietaryTag.VEGETARIAN, DietaryTag.VEGAN], cost_per_portion=1.35, total_cost=round(pomodoro_portions * 1.35, 2)),
-                    PlanItem(recipe_id="recipe_verde_soup", recipe_name="Tuscan Tomato Basil Soup", portions=25, dietary_tags=[DietaryTag.VEGAN], cost_per_portion=0.85, total_cost=21.25),
-                    PlanItem(recipe_id="recipe_verde_dessert", recipe_name="Strawberries & Hand-Whipped Vanilla Cream", portions=50, dietary_tags=[DietaryTag.VEGETARIAN, DietaryTag.GLUTEN_FREE], cost_per_portion=1.15, total_cost=57.50),
-                ]
-                if not has_cream_blocker:
-                    plan_c_verde_items.insert(0, PlanItem(recipe_id="recipe_verde_alfredo", recipe_name="Creamy Garlic Fettuccine Alfredo", portions=alfredo_portions, dietary_tags=[DietaryTag.VEGETARIAN], cost_per_portion=2.20, total_cost=round(alfredo_portions * 2.20, 2)))
-
                 plan_c_title = "Choice C: STILLGOOD Fixed-Menu Smart Pairing"
                 plan_c_subtitle = f"Balances hot line for {target} diners & features Strawberries & Hand-Whipped Cream dessert special to rescue all 8 kg fruit."
                 plan_c_why = (
@@ -401,72 +456,84 @@ class RescuePlanner:
         )
 
         # --- PLAN C: STILLGOOD Smart Rescue Plan (350 Meals + Rescue) ---
-        # Substitutes Shahi Paneer with Chana Masala (140) + Palak Dal (140) + Chicken Tikka (70)
-        # Veg Total = 280 (exceeds >= 120 required)
-        # Palak Dal consumes 14 kg of the 24 kg at-risk spinach!
-        # Chana Masala uses pantry chickpeas. Zero paneer needed!
-        plan_c_items = [
-            PlanItem(
-                recipe_id="recipe_chana_masala",
-                recipe_name="Amritsari Chana Masala",
-                portions=140,
-                dietary_tags=[DietaryTag.VEGETARIAN, DietaryTag.VEGAN, DietaryTag.GLUTEN_FREE, DietaryTag.DAIRY_FREE],
-                cost_per_portion=0.65,
-                total_cost=91.0
-            ),
-            PlanItem(
-                recipe_id="recipe_palak_dal",
-                recipe_name="Homestyle Palak Dal Tadka",
-                portions=140,
-                dietary_tags=[DietaryTag.VEGETARIAN, DietaryTag.VEGAN, DietaryTag.GLUTEN_FREE, DietaryTag.DAIRY_FREE],
-                cost_per_portion=0.62,
-                total_cost=86.8
-            ),
-            PlanItem(
-                recipe_id="recipe_chicken_tikka",
-                recipe_name="Murgh Tikka Masala",
-                portions=70,
-                dietary_tags=[DietaryTag.HALAL, DietaryTag.GLUTEN_FREE],
-                cost_per_portion=1.52,
-                total_cost=106.4
-            ),
-            PlanItem(
-                recipe_id="recipe_jeera_rice",
-                recipe_name="Fragrant Jeera Basmati Rice",
-                portions=350,
-                dietary_tags=[DietaryTag.VEGETARIAN, DietaryTag.VEGAN, DietaryTag.GLUTEN_FREE],
-                cost_per_portion=0.22,
-                total_cost=77.0
-            ),
-            PlanItem(
-                recipe_id="recipe_tandoori_roti",
-                recipe_name="Artisan Tandoori Roti",
-                portions=350,
-                dietary_tags=[DietaryTag.VEGETARIAN, DietaryTag.VEGAN],
-                cost_per_portion=0.12,
-                total_cost=42.0
-            ),
-            PlanItem(
-                recipe_id="recipe_garden_salad",
-                recipe_name="Rainbow Garden Salad",
-                portions=200,
-                dietary_tags=[DietaryTag.VEGETARIAN, DietaryTag.VEGAN, DietaryTag.GLUTEN_FREE],
-                cost_per_portion=0.24,
-                total_cost=48.0
-            ),
-        ]
-        plan_c = self.evaluate_plan_items(
-            plan_id="plan_c_smart_rescue",
-            plan_type="PLAN_C_SMART_RESCUE",
-            title="Plan C: STILLGOOD Smart Rescue Plan",
-            subtitle="Replaces delayed paneer with approved Chana Masala & rescues at-risk spinach in Palak Dal.",
-            scenario=scenario,
-            planned_items=plan_c_items,
-            why_gemini_suggested=(
+        from app.core.database import db
+        active_disruptions = db.get_disruptions(self.kitchen.id, active_only=True)
+        active_confirmed = [d for d in active_disruptions if d.confirmation_status.value == "CONFIRMED"]
+        disrupted_ingredients = set(scenario.excluded_ingredients)
+        for d in scenario.supplier_disruptions:
+            if d.get("ingredient"):
+                disrupted_ingredients.add(d["ingredient"].lower())
+        for d in active_confirmed:
+            disrupted_ingredients.add(d.affected_name.lower())
+
+        all_disrupted_stems = set()
+        for dis in disrupted_ingredients:
+            for s in get_ingredient_stems(dis):
+                all_disrupted_stems.add(s)
+
+        blocked_recipe_ids = set()
+        for r in self.recipes:
+            r_name_l = r.name.lower()
+            if any(s in r_name_l for s in all_disrupted_stems):
+                blocked_recipe_ids.add(r.id)
+                continue
+            for ing in r.ingredients:
+                ing_name_l = ing.ingredient_name.lower()
+                ing_id_l = ing.ingredient_id.lower()
+                if any(s in ing_name_l or s in ing_id_l for s in all_disrupted_stems):
+                    blocked_recipe_ids.add(r.id)
+                    break
+
+        plan_c_items = []
+        # Chana Masala (default hero replacement)
+        if "recipe_chana_masala" not in blocked_recipe_ids:
+            chana_portions = 240 if "recipe_palak_dal" in blocked_recipe_ids else 140
+            plan_c_items.append(PlanItem(recipe_id="recipe_chana_masala", recipe_name="Amritsari Chana Masala", portions=chana_portions, dietary_tags=[DietaryTag.VEGETARIAN, DietaryTag.VEGAN, DietaryTag.GLUTEN_FREE, DietaryTag.DAIRY_FREE], cost_per_portion=0.65, total_cost=round(chana_portions * 0.65, 2)))
+        
+        # Palak Dal (rescues spinach)
+        if "recipe_palak_dal" not in blocked_recipe_ids:
+            plan_c_items.append(PlanItem(recipe_id="recipe_palak_dal", recipe_name="Homestyle Palak Dal Tadka", portions=140, dietary_tags=[DietaryTag.VEGETARIAN, DietaryTag.VEGAN, DietaryTag.GLUTEN_FREE, DietaryTag.DAIRY_FREE], cost_per_portion=0.62, total_cost=86.8))
+        
+        # Chicken Tikka (Halal main)
+        if "recipe_chicken_tikka" not in blocked_recipe_ids:
+            plan_c_items.append(PlanItem(recipe_id="recipe_chicken_tikka", recipe_name="Murgh Tikka Masala", portions=70, dietary_tags=[DietaryTag.HALAL, DietaryTag.GLUTEN_FREE], cost_per_portion=1.52, total_cost=106.4))
+        
+        # Grains: Rice & Roti
+        if "recipe_jeera_rice" not in blocked_recipe_ids:
+            plan_c_items.append(PlanItem(recipe_id="recipe_jeera_rice", recipe_name="Fragrant Jeera Basmati Rice", portions=350, dietary_tags=[DietaryTag.VEGETARIAN, DietaryTag.VEGAN, DietaryTag.GLUTEN_FREE], cost_per_portion=0.22, total_cost=77.0))
+        if "recipe_tandoori_roti" not in blocked_recipe_ids:
+            plan_c_items.append(PlanItem(recipe_id="recipe_tandoori_roti", recipe_name="Artisan Tandoori Roti", portions=350, dietary_tags=[DietaryTag.VEGETARIAN, DietaryTag.VEGAN], cost_per_portion=0.12, total_cost=42.0))
+        if "recipe_garden_salad" not in blocked_recipe_ids:
+            plan_c_items.append(PlanItem(recipe_id="recipe_garden_salad", recipe_name="Rainbow Garden Salad", portions=200, dietary_tags=[DietaryTag.VEGETARIAN, DietaryTag.VEGAN, DietaryTag.GLUTEN_FREE], cost_per_portion=0.24, total_cost=48.0))
+
+        if blocked_recipe_ids:
+            blocked_names = [self.recipes_by_id[rid].name for rid in blocked_recipe_ids if rid in self.recipes_by_id]
+            eligible_names = [item.recipe_name for item in plan_c_items]
+            dis_label = ", ".join(sorted(disrupted_ingredients)) if disrupted_ingredients else "ingredient disruption"
+            plan_c_title = "Plan C: STILLGOOD Out-of-Stock Substitution Plan"
+            plan_c_subtitle = f"86'd all {dis_label} recipes ({', '.join(blocked_names)}); scaled remaining lines for service."
+            plan_c_why = (
+                f"STILLGOOD identified that {dis_label} is out of stock or disrupted for upcoming service. "
+                f"All affected recipes ({', '.join(blocked_names)}) were automatically 86'd. "
+                f"Prep has been safely reallocated to {', '.join(eligible_names)} to satisfy dietary minimums."
+            )
+        else:
+            plan_c_title = "Plan C: STILLGOOD Smart Rescue Plan"
+            plan_c_subtitle = "Replaces delayed paneer with approved Chana Masala & rescues at-risk spinach in Palak Dal."
+            plan_c_why = (
                 "Gemini identified that in-stock Kabuli Chickpeas and at-risk Fresh Spinach could replace unavailable Paneer. "
                 "By pairing Amritsari Chana Masala with Homestyle Palak Dal, the kitchen preserves 280 vegetarian portions "
                 "(exceeding the 120-meal requirement), rescues 14.0 kg of perishable spinach before expiry, and bypasses the delayed dairy supplier."
-            ),
+            )
+
+        plan_c = self.evaluate_plan_items(
+            plan_id="plan_c_smart_rescue",
+            plan_type="PLAN_C_SMART_RESCUE",
+            title=plan_c_title,
+            subtitle=plan_c_subtitle,
+            scenario=scenario,
+            planned_items=plan_c_items,
+            why_gemini_suggested=plan_c_why,
             is_recommended=True
         )
 

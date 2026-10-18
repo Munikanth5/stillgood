@@ -14,6 +14,25 @@ interface PredictGuestsModalProps {
   kitchenName: string;
 }
 
+interface SeatingDiff {
+  size: number;
+  prevArrivals: number;
+  newArrivals: number;
+  prevRemaining: number;
+  newRemaining: number;
+  prevTotal: number;
+  newTotal: number;
+  timestamp: string;
+}
+
+interface OverrideDiff {
+  prevCovers: number;
+  newCovers: number;
+  diff: number;
+  baseline: number;
+  timestamp: string;
+}
+
 export const PredictGuestsModal: React.FC<PredictGuestsModalProps> = ({
   isOpen,
   onClose,
@@ -27,6 +46,8 @@ export const PredictGuestsModal: React.FC<PredictGuestsModalProps> = ({
   const [recordingSuccess, setRecordingSuccess] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
+  const [lastSeatingDiff, setLastSeatingDiff] = useState<SeatingDiff | null>(null);
+  const [lastOverrideDiff, setLastOverrideDiff] = useState<OverrideDiff | null>(null);
 
   // Manager Override (Part 2: Separately labelled from statistical model)
   const [managerOverride, setManagerOverride] = useState<number | ''>('');
@@ -38,14 +59,16 @@ export const PredictGuestsModal: React.FC<PredictGuestsModalProps> = ({
     }
   }, [isOpen, kitchenId, isRain, overrideActive]);
 
-  const loadForecast = async (rain: boolean) => {
+  const loadForecast = async (rain: boolean, overrideVal?: number | '', isOverrideActive?: boolean) => {
     setLoading(true);
     try {
+      const activeOvr = isOverrideActive !== undefined ? isOverrideActive : overrideActive;
+      const ovrVal = overrideVal !== undefined ? overrideVal : managerOverride;
       const params: any = {
         cancellations: rain ? 40 : 0
       };
-      if (overrideActive && typeof managerOverride === 'number') {
-        params.manager_override = managerOverride;
+      if (activeOvr && typeof ovrVal === 'number' && ovrVal > 0) {
+        params.manager_override = ovrVal;
         params.manager_override_reason = 'Manager private party or local event adjustment';
       }
       const data = await fetchWalkinForecast(kitchenId, params);
@@ -57,20 +80,95 @@ export const PredictGuestsModal: React.FC<PredictGuestsModalProps> = ({
     }
   };
 
+  const handleApplyOverride = async () => {
+    if (typeof managerOverride === 'number' && managerOverride > 0) {
+      const prevCovers = forecast?.total_expected_covers_today ?? 0;
+      setOverrideActive(true);
+      setLoading(true);
+      try {
+        const params: any = {
+          cancellations: isRain ? 40 : 0,
+          manager_override: managerOverride,
+          manager_override_reason: 'Manager private party or local event adjustment'
+        };
+        const data = await fetchWalkinForecast(kitchenId, params);
+        setForecast(data);
+        setLastOverrideDiff({
+          prevCovers,
+          newCovers: data.total_expected_covers_today,
+          diff: data.total_expected_covers_today - prevCovers,
+          baseline: data.baseline_model_covers,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+        });
+      } catch (err) {
+        console.error('Error applying manager override:', err);
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      handleClearOverride();
+    }
+  };
+
+  const handleClearOverride = async () => {
+    const prevCovers = forecast?.total_expected_covers_today ?? 0;
+    setOverrideActive(false);
+    setManagerOverride('');
+    setLoading(true);
+    try {
+      const params: any = { cancellations: isRain ? 40 : 0 };
+      const data = await fetchWalkinForecast(kitchenId, params);
+      setForecast(data);
+      setLastOverrideDiff({
+        prevCovers,
+        newCovers: data.total_expected_covers_today,
+        diff: data.total_expected_covers_today - prevCovers,
+        baseline: data.baseline_model_covers,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+      });
+    } catch (err) {
+      console.error('Error clearing override:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleRecordWalkin = async (partySizeToRecord?: number) => {
     const size = partySizeToRecord || walkinPartySize;
+    const prevArrivals = forecast?.current_recorded_arrivals ?? 0;
+    const prevRemaining = forecast?.remaining_seating_capacity ?? 0;
+    const prevTotal = forecast?.total_expected_covers_today ?? 0;
+
     setIsRecording(true);
     try {
       const eventId = `EVT-HOST-${Date.now()}`;
       await recordWalkinEvent(kitchenId, {
         id: eventId,
+        kitchen_id: kitchenId,
         party_size: size,
         event_type: 'walkin_arrival',
         notes: `Walk-in party of ${size} seated at host stand`
       });
       setRecordingSuccess(`Recorded ${size} guest${size > 1 ? 's' : ''} seated at the door.`);
-      setTimeout(() => setRecordingSuccess(null), 3500);
-      await loadForecast(isRain);
+      setTimeout(() => setRecordingSuccess(null), 4000);
+
+      const params: any = { cancellations: isRain ? 40 : 0 };
+      if (overrideActive && typeof managerOverride === 'number' && managerOverride > 0) {
+        params.manager_override = managerOverride;
+        params.manager_override_reason = 'Manager private party or local event adjustment';
+      }
+      const data = await fetchWalkinForecast(kitchenId, params);
+      setForecast(data);
+      setLastSeatingDiff({
+        size,
+        prevArrivals,
+        newArrivals: data.current_recorded_arrivals,
+        prevRemaining,
+        newRemaining: data.remaining_seating_capacity,
+        prevTotal,
+        newTotal: data.total_expected_covers_today,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+      });
     } catch (err) {
       console.error('Failed to record walk-in:', err);
     } finally {
@@ -172,24 +270,60 @@ export const PredictGuestsModal: React.FC<PredictGuestsModalProps> = ({
                   <span className="text-[11px] font-semibold text-espresso/60 block">
                     Actual Arrivals Recorded
                   </span>
-                  <div className="font-serif text-3xl font-bold text-espresso mt-1">
-                    {forecast.current_recorded_arrivals} <span className="text-sm font-sans font-normal text-espresso/70">seated</span>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="font-serif text-3xl font-bold text-espresso">
+                      {forecast.current_recorded_arrivals}
+                    </span>
+                    <span className="text-sm font-sans font-normal text-espresso/70">seated</span>
+                    {lastSeatingDiff && (
+                      <span className="px-2 py-0.5 bg-sage/20 text-sage text-[11px] font-bold rounded-md animate-pulse">
+                        +{lastSeatingDiff.size} seated
+                      </span>
+                    )}
                   </div>
-                  <span className="text-[11px] text-sage font-medium block mt-1">
-                    {forecast.remaining_seating_capacity} seats available
+                  <span className="text-[11px] text-sage font-medium block mt-1 flex items-center gap-1">
+                    <span>{forecast.remaining_seating_capacity} seats available</span>
+                    {lastSeatingDiff && (
+                      <span className="text-terracotta font-semibold">(-{lastSeatingDiff.size})</span>
+                    )}
                   </span>
                 </div>
 
                 <div className="p-4 bg-white rounded-2xl border border-subtle shadow-xs">
-                  <span className="text-[11px] font-semibold text-espresso/60 block">
-                    Total Projected Covers
-                  </span>
-                  <div className="font-serif text-3xl font-bold text-cocoa mt-1">
-                    {forecast.total_expected_covers_today} <span className="text-sm font-sans font-normal text-espresso/70">covers</span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-espresso/60 block">
+                      Total Projected Covers
+                    </span>
+                    {overrideActive ? (
+                      <span className="px-1.5 py-0.5 bg-saffron/20 text-espresso text-[10px] font-bold rounded-md">
+                        Override Active
+                      </span>
+                    ) : lastSeatingDiff ? (
+                      <span className="px-1.5 py-0.5 bg-sage/20 text-sage text-[10px] font-bold rounded-md">
+                        +{lastSeatingDiff.size} live
+                      </span>
+                    ) : null}
                   </div>
-                  <span className="text-[11px] text-espresso/60 block mt-1">
-                    {forecast.expected_reservation_attendance} reservations + {forecast.future_walkins_expected} future walk-ins
-                  </span>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="font-serif text-3xl font-bold text-cocoa">
+                      {forecast.total_expected_covers_today}
+                    </span>
+                    <span className="text-sm font-sans font-normal text-espresso/70">covers</span>
+                    {overrideActive && forecast.manager_override_difference !== undefined && (
+                      <span className={`px-2 py-0.5 text-[11px] font-bold rounded-md ${
+                        forecast.manager_override_difference >= 0 ? 'bg-sage/20 text-sage' : 'bg-terracotta/20 text-terracotta'
+                      }`}>
+                        {forecast.manager_override_difference > 0 ? `+${forecast.manager_override_difference}` : forecast.manager_override_difference}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-espresso/60 block mt-1">
+                    {overrideActive && forecast.baseline_model_covers ? (
+                      <span>Baseline: <strong>{forecast.baseline_model_covers} covers</strong> • <strong>{forecast.manager_override_difference && forecast.manager_override_difference > 0 ? `+${forecast.manager_override_difference}` : forecast.manager_override_difference} difference</strong></span>
+                    ) : (
+                      <span>{forecast.expected_reservation_attendance} reservations + {forecast.future_walkins_expected} future walk-ins</span>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -279,7 +413,37 @@ export const PredictGuestsModal: React.FC<PredictGuestsModalProps> = ({
                 </div>
               </div>
 
-              {recordingSuccess && (
+              {/* Explicit Seating Difference Card */}
+              {lastSeatingDiff && (
+                <div className="p-3.5 bg-sage/10 border border-sage/30 rounded-2xl space-y-2 text-xs animate-in fade-in">
+                  <div className="flex items-center justify-between font-bold text-sage">
+                    <span className="flex items-center gap-1.5">
+                      <Check className="w-4 h-4" />
+                      Live Arrival Ingested: +{lastSeatingDiff.size} Guests Seated at Door Stand
+                    </span>
+                    <span className="text-[10px] text-espresso/60 font-mono">{lastSeatingDiff.timestamp}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-[11px]">
+                    <div className="p-2.5 bg-white rounded-xl border border-subtle">
+                      <span className="text-espresso/60 block text-[10px] uppercase font-bold">Seated Diners</span>
+                      <span className="font-bold text-espresso text-sm">{lastSeatingDiff.prevArrivals} &rarr; {lastSeatingDiff.newArrivals}</span>
+                      <span className="text-sage font-bold ml-1 text-xs">(+{lastSeatingDiff.size})</span>
+                    </div>
+                    <div className="p-2.5 bg-white rounded-xl border border-subtle">
+                      <span className="text-espresso/60 block text-[10px] uppercase font-bold">Table Capacity</span>
+                      <span className="font-bold text-espresso text-sm">{lastSeatingDiff.prevRemaining} &rarr; {lastSeatingDiff.newRemaining}</span>
+                      <span className="text-terracotta font-bold ml-1 text-xs">(-{lastSeatingDiff.size})</span>
+                    </div>
+                    <div className="p-2.5 bg-white rounded-xl border border-subtle">
+                      <span className="text-espresso/60 block text-[10px] uppercase font-bold">Projected Covers</span>
+                      <span className="font-bold text-espresso text-sm">{lastSeatingDiff.prevTotal} &rarr; {lastSeatingDiff.newTotal}</span>
+                      <span className="text-sage font-bold ml-1 text-xs">(+{lastSeatingDiff.size})</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {recordingSuccess && !lastSeatingDiff && (
                 <div className="p-3 bg-sage/15 border border-sage/30 rounded-xl text-sage text-xs flex items-center gap-2">
                   <Check className="w-4 h-4 shrink-0" />
                   <span>{recordingSuccess} Remaining table capacity updated.</span>
@@ -287,7 +451,7 @@ export const PredictGuestsModal: React.FC<PredictGuestsModalProps> = ({
               )}
 
               {/* Manager Override Section (Part 2: Separately Labelled from Algorithm) */}
-              <div className="p-4 bg-white rounded-2xl border border-subtle shadow-xs space-y-2">
+              <div className="p-4 bg-white rounded-2xl border border-subtle shadow-xs space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold uppercase tracking-wider text-espresso/70 flex items-center gap-1.5">
                     <SlidersHorizontal className="w-3.5 h-3.5 text-terracotta" />
@@ -304,20 +468,14 @@ export const PredictGuestsModal: React.FC<PredictGuestsModalProps> = ({
                   <input
                     type="number"
                     min={0}
-                    placeholder="e.g. 45 covers"
+                    placeholder="e.g. 110 covers"
                     value={managerOverride}
                     onChange={(e) => setManagerOverride(e.target.value === '' ? '' : parseInt(e.target.value))}
                     className="w-36 px-3 py-1.5 text-xs font-serif font-bold rounded-xl border border-subtle bg-vanilla text-espresso"
                   />
                   <button
                     type="button"
-                    onClick={() => {
-                      if (typeof managerOverride === 'number') {
-                        setOverrideActive(true);
-                      } else {
-                        setOverrideActive(false);
-                      }
-                    }}
+                    onClick={handleApplyOverride}
                     className={`px-3 py-1.5 text-xs font-semibold rounded-xl transition ${
                       overrideActive
                         ? 'bg-sage text-white'
@@ -329,16 +487,60 @@ export const PredictGuestsModal: React.FC<PredictGuestsModalProps> = ({
                   {overrideActive && (
                     <button
                       type="button"
-                      onClick={() => {
-                        setOverrideActive(false);
-                        setManagerOverride('');
-                      }}
-                      className="text-xs text-terracotta underline"
+                      onClick={handleClearOverride}
+                      className="text-xs text-terracotta underline ml-1"
                     >
                       Clear
                     </button>
                   )}
                 </div>
+
+                {/* Explicit Manager Override Difference Card */}
+                {lastOverrideDiff && (
+                  <div className="p-3.5 bg-saffron/10 border border-saffron/40 rounded-2xl space-y-2 text-xs animate-in fade-in">
+                    <div className="flex items-center justify-between font-bold text-espresso">
+                      <span className="flex items-center gap-1.5">
+                        <Check className="w-4 h-4 text-sage" />
+                        Existing Count Updated: Manager Override {overrideActive ? 'Applied' : 'Cleared'}
+                      </span>
+                      <span className="text-[10px] text-espresso/60 font-mono">{lastOverrideDiff.timestamp}</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-[11px]">
+                      <div className="p-2.5 bg-white rounded-xl border border-subtle">
+                        <span className="text-espresso/60 block text-[10px] uppercase font-bold">Statistical Baseline</span>
+                        <span className="font-bold text-espresso text-sm">{lastOverrideDiff.baseline} covers</span>
+                      </div>
+                      <div className="p-2.5 bg-white rounded-xl border border-subtle">
+                        <span className="text-espresso/60 block text-[10px] uppercase font-bold">Existing Count Change</span>
+                        <span className="font-bold text-espresso text-sm">{lastOverrideDiff.prevCovers} &rarr; {lastOverrideDiff.newCovers}</span>
+                      </div>
+                      <div className="p-2.5 bg-white rounded-xl border border-subtle">
+                        <span className="text-espresso/60 block text-[10px] uppercase font-bold">Net Difference</span>
+                        <span className={`font-bold text-sm ${lastOverrideDiff.diff >= 0 ? 'text-sage' : 'text-terracotta'}`}>
+                          {lastOverrideDiff.diff > 0 ? `+${lastOverrideDiff.diff}` : lastOverrideDiff.diff} covers
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {overrideActive && forecast && !lastOverrideDiff && (
+                  <div className="p-3 bg-vanilla rounded-xl border border-sage/40 flex flex-wrap items-center justify-between text-xs gap-2 animate-in fade-in">
+                    <div>
+                      <span className="font-bold text-espresso block">
+                        Manager Override Active: {forecast.total_expected_covers_today} Covers
+                      </span>
+                      <span className="text-[11px] text-espresso/70">
+                        Statistical model baseline is <strong>{forecast.baseline_model_covers || 98} covers</strong>
+                      </span>
+                    </div>
+                    <div className={`px-2.5 py-1 rounded-lg font-bold text-xs ${
+                      (forecast.manager_override_difference ?? 0) >= 0 ? 'bg-sage/15 text-sage' : 'bg-terracotta/15 text-terracotta'
+                    }`}>
+                      {(forecast.manager_override_difference ?? 0) > 0 ? `+${forecast.manager_override_difference}` : forecast.manager_override_difference} covers vs baseline
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Expandable Section: "How was this predicted?" (Directive 7 & Part 2 Holdout Evaluation) */}

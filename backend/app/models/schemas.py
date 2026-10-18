@@ -1,5 +1,7 @@
 from enum import Enum
 from typing import List, Optional, Dict, Any
+from datetime import datetime, timezone
+import time
 from pydantic import BaseModel, Field, model_validator
 
 class KitchenType(str, Enum):
@@ -425,6 +427,7 @@ class WalkinForecastResult(BaseModel):
     predicted_walkins_next_30m: int
     walkin_prediction_interval: List[int] # [lower, upper]
     total_expected_covers_today: int
+    baseline_model_covers: int = 98
     high_demand_scenario: int
     low_demand_scenario: int
     current_recorded_arrivals: int
@@ -436,18 +439,29 @@ class WalkinForecastResult(BaseModel):
     data_sources_connected: List[str] = ["Osteria Verde Historical Service Logs (28 Services)", "Host-Stand Live Arrival Webhook"]
     future_walkins_expected: int = 21
     manager_override: Optional[int] = None
+    manager_override_difference: int = 0
     manager_override_reason: Optional[str] = None
     connector_mode: str = "EVALUATED_HISTORICAL_WITH_LIVE_EVENTS"
     intervals: List[WalkinIntervalForecast]
     explanation: str
 
 class WalkinEvent(BaseModel):
-    id: str
-    kitchen_id: str
-    timestamp: str
-    party_size: int
-    event_type: str  # "walkin_arrival", "reservation_arrival", "cancellation", "takeaway"
+    id: Optional[str] = None
+    kitchen_id: Optional[str] = None
+    timestamp: Optional[str] = None
+    party_size: int = 1
+    event_type: str = "walkin_arrival"  # "walkin_arrival", "reservation_arrival", "cancellation", "takeaway"
     notes: Optional[str] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def set_defaults(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if not data.get("id"):
+                data["id"] = f"EVT-HOST-{int(time.time() * 1000)}"
+            if not data.get("timestamp"):
+                data["timestamp"] = datetime.now(timezone.utc).strftime("%H:%M UTC")
+        return data
 
 class ComboPriceOption(BaseModel):
     tier_name: str  # "Quick-Sale 20%", "Value-Combo 35%", "Flash Recovery 50%"

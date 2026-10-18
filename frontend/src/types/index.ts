@@ -374,6 +374,7 @@ export interface WalkinForecastResult {
   predicted_walkins_next_30m: number;
   walkin_prediction_interval: number[];
   total_expected_covers_today: number;
+  baseline_model_covers?: number;
   high_demand_scenario: number;
   low_demand_scenario: number;
   current_recorded_arrivals: number;
@@ -384,6 +385,7 @@ export interface WalkinForecastResult {
   data_sources_connected?: string[];
   future_walkins_expected?: number;
   manager_override?: number | null;
+  manager_override_difference?: number;
   manager_override_reason?: string | null;
   connector_mode?: string;
   evaluation_metrics: {

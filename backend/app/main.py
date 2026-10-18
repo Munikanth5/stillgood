@@ -277,6 +277,7 @@ def get_walkin_forecast(
 
 @app.post("/api/kitchens/{kitchen_id}/walkin-event", response_model=WalkinEvent)
 def record_walkin_event(kitchen_id: str, event: WalkinEvent):
+    event.kitchen_id = kitchen_id
     return db.record_walkin_event(event)
 
 # --- 4. Meal Combos & Offers ---

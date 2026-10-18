@@ -445,6 +445,7 @@ class KitchenDatabase:
             "action_type": "plan_meals"
         })
 
+        db_walkin_count = sum(getattr(e, "party_size", 1) for e in self.get_walkin_events(kitchen.id))
         return {
             "kitchen_id": kitchen.id,
             "kitchen_name": kitchen.name,
@@ -453,9 +454,10 @@ class KitchenDatabase:
             "operational_status": "Ready for Service • Two-Stage Prep Active" if is_restaurant else "Active Operations",
             "attention_items": attention[:3], # Strict Max 3 items!
             "quick_stats": {
-                "expected_guests": 105 if is_restaurant else 350,
+                "expected_guests": (105 + db_walkin_count) if is_restaurant else 350,
                 "confirmed_bookings": 70 if is_restaurant else 350,
                 "predicted_walkins": 35 if is_restaurant else 0,
+                "recorded_walkins": db_walkin_count,
                 "surplus_portions_at_risk": sum(b.portions_remaining for b in eligible_batches) if eligible_batches else 27,
                 "active_offers_count": len([c for c in self.get_combos(kitchen.id) if c.status == "APPROVED"])
             },

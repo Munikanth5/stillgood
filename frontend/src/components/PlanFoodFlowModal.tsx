@@ -452,6 +452,51 @@ export const PlanFoodFlowModal: React.FC<PlanFoodFlowModalProps> = ({
                     <span>{analyzingDisruption ? 'Extracting...' : 'Verify Disruption'}</span>
                   </button>
                 </div>
+
+                {/* Quick Disruption Chips for testing any ingredient */}
+                <div className="flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-subtle/50">
+                  <span className="text-[11px] text-espresso/60 mr-1 font-medium">Quick Scenarios:</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDisruptionText(isRestaurant ? 'Tomatoes are out of stock and unavailable for the next five days.' : 'Spinach delivery is delayed past lunch rush.');
+                      setProposalResponse(null);
+                    }}
+                    className="px-2.5 py-1 text-[11px] rounded-lg border border-subtle bg-vanilla hover:bg-oat text-espresso transition"
+                  >
+                    {isRestaurant ? '🍅 Tomatoes Out of Stock' : '🥬 Spinach Delayed'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDisruptionText(isRestaurant ? 'Fresh basil is unavailable due to supplier shortage.' : 'Chicken breast delivery delayed.');
+                      setProposalResponse(null);
+                    }}
+                    className="px-2.5 py-1 text-[11px] rounded-lg border border-subtle bg-vanilla hover:bg-oat text-espresso transition"
+                  >
+                    {isRestaurant ? '🌿 Fresh Basil Unavailable' : '🍗 Chicken Delayed'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDisruptionText(isRestaurant ? 'Heavy cream delivery delayed past dinner rush.' : 'Paneer supplier cannot deliver before lunch.');
+                      setProposalResponse(null);
+                    }}
+                    className="px-2.5 py-1 text-[11px] rounded-lg border border-subtle bg-vanilla hover:bg-oat text-espresso transition"
+                  >
+                    {isRestaurant ? '🥛 Heavy Cream Delayed' : '🧀 Paneer Delayed'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDisruptionText(isRestaurant ? 'Fresh strawberries are out of stock for 3 days.' : '50 staff working remotely.');
+                      setProposalResponse(null);
+                    }}
+                    className="px-2.5 py-1 text-[11px] rounded-lg border border-subtle bg-vanilla hover:bg-oat text-espresso transition"
+                  >
+                    {isRestaurant ? '🍓 Strawberries Out of Stock' : '👥 Attendance Drop'}
+                  </button>
+                </div>
               </div>
 
               {/* 4. Manager Confirmation Card (Extracted Proposal) */}
@@ -496,7 +541,7 @@ export const PlanFoodFlowModal: React.FC<PlanFoodFlowModalProps> = ({
                       className="p-2.5 rounded-xl bg-terracotta text-white text-xs font-semibold hover:bg-terracotta-dark transition text-left"
                     >
                       <span className="font-bold block">Confirm: Stock Depleted</span>
-                      <span className="text-[10px] text-white/80 block">86 all strawberry recipes across service dates</span>
+                      <span className="text-[10px] text-white/80 block">86 all {proposalResponse.extracted_disruption.affected_name} recipes ({proposalResponse.extracted_disruption.affected_recipe_names.length} dishes)</span>
                     </button>
                     <button
                       type="button"
@@ -505,7 +550,7 @@ export const PlanFoodFlowModal: React.FC<PlanFoodFlowModalProps> = ({
                       className="p-2.5 rounded-xl bg-oat border border-subtle text-espresso text-xs font-semibold hover:bg-subtle transition text-left"
                     >
                       <span className="font-bold block">Confirm: Future Outage Only</span>
-                      <span className="text-[10px] text-espresso/70 block">Keep verified on-hand cooler batch active today</span>
+                      <span className="text-[10px] text-espresso/70 block">Keep on-hand cooler batch of {proposalResponse.extracted_disruption.affected_name} active today</span>
                     </button>
                   </div>
                 </div>

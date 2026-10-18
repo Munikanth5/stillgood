@@ -520,7 +520,10 @@ export const KitchenCompanion: React.FC<KitchenCompanionProps> = ({
 
       <PredictGuestsModal
         isOpen={isPredictOpen}
-        onClose={() => setIsPredictOpen(false)}
+        onClose={() => {
+          setIsPredictOpen(false);
+          loadSummary();
+        }}
         kitchenId={kitchen.id}
         kitchenName={kitchen.name}
       />
