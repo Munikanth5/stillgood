@@ -1,10 +1,12 @@
 # STILLGOOD — Production Deployment Report
 
 **Deployment Date:** October 18, 2026  
-**Primary Live Application URL:** https://stillgood-backend-518727782721.asia-south1.run.app  
+**Live Production URL (Firebase Hosting CDN):** https://project-698b49f2-0692-4677-948.web.app  
+**Alternate Production URL (Firebase):** https://project-698b49f2-0692-4677-948.firebaseapp.com  
+**Direct Microservice URL (Cloud Run):** https://stillgood-backend-518727782721.asia-south1.run.app  
 **Google Cloud Project:** `project-698b49f2-0692-4677-948` (Project Number: `518727782721`)  
 **Deployment Region:** `asia-south1` (Mumbai, India)  
-**Platform Architecture:** Google Cloud Run (Serverless Container), Google Artifact Registry, Google Cloud Firestore (Native Mode), Vertex AI (Gemini 2.5 Flash), Google Cloud Build.
+**Platform Architecture:** Google Cloud Run (Serverless Container), Firebase Hosting (Global Edge CDN), Google Artifact Registry, Google Cloud Firestore (Native Mode), Vertex AI (Gemini 2.5 Flash), Google Cloud Build.
 
 ---
 

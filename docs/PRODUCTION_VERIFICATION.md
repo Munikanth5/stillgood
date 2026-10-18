@@ -1,6 +1,8 @@
 # STILLGOOD — Production Verification Runbook & Audit
 
-**Target URL:** https://stillgood-backend-518727782721.asia-south1.run.app  
+**Production URLs:**
+- **Firebase Hosting CDN:** https://project-698b49f2-0692-4677-948.web.app
+- **Cloud Run Microservice:** https://stillgood-backend-518727782721.asia-south1.run.app  
 **Verification Date:** October 18, 2026  
 **Auditor:** Senior Release QA & Cloud Security Engineer
 
