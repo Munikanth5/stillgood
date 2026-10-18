@@ -108,9 +108,9 @@ npm run build
 
 ---
 
-## 7. The Signature Hackathon WOW Scenario
+## 7. Signature Kitchen Walkthrough Scenario
 
-Follow this walkthrough to reproduce the flagship hackathon demonstration:
+Follow this walkthrough to reproduce the core operational demonstration:
 
 1. **Initial State:** Apex Tech Corporate Cafeteria expects 500 covers for lunch.
 2. **Disruption Alert:** Morning attendance drops from 500 to 350. Fresh Dairy Farms paneer delivery is delayed until 2:30 PM (lunch finishes at 2:00 PM). Kitchen has 24 kg of Fresh Spinach expiring tomorrow.
@@ -128,9 +128,11 @@ Follow this walkthrough to reproduce the flagship hackathon demonstration:
 
 ## 8. Documentation Sitemap
 
+- [Production Deployment Report](docs/DEPLOYMENT_REPORT.md)
+- [Production Verification Runbook](docs/PRODUCTION_VERIFICATION.md)
+- [Google Cloud Setup](docs/GOOGLE_CLOUD_SETUP.md)
+- [Known Limitations](docs/KNOWN_LIMITATIONS.md)
 - [System Architecture](docs/ARCHITECTURE.md)
-- [3-Minute Hackathon Demo Script](docs/HACKATHON_DEMO_SCRIPT.md)
-- [Google Cloud Deployment Guide](docs/GCP_DEPLOYMENT_GUIDE.md)
 - [Impact Accounting Methodology](docs/IMPACT_METHODOLOGY.md)
 - [Permanent Operating Rules](AGENTS.md)
 
