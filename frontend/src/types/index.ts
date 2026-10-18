@@ -470,9 +470,12 @@ export interface MealOfferOrderResult {
 export interface AttentionItem {
   id: string;
   title: string;
-  detail: string;
-  urgency: 'high' | 'medium' | 'low';
-  action_type: 'walkin' | 'prepared_rescue' | 'replan' | 'combo';
+  detail?: string;
+  description?: string;
+  suggested_action?: string;
+  category?: string;
+  urgency: 'high' | 'medium' | 'low' | string;
+  action_type: string;
 }
 
 export interface KitchenCompanionSummary {

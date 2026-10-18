@@ -104,12 +104,56 @@ export const KitchenCompanion: React.FC<KitchenCompanionProps> = ({
     }
   };
 
-  const handleAttentionAction = (actionType: AttentionItem['action_type']) => {
-    if (actionType === 'walkin') setIsPredictOpen(true);
-    else if (actionType === 'prepared_rescue') setIsRescueOpen(true);
-    else if (actionType === 'combo') setIsOffersOpen(true);
-    else if (actionType === 'replan') {
-      setPlanFlowDisruption('');
+  const handleAttentionAction = (item: AttentionItem) => {
+    const actionType = (item.action_type || '').toLowerCase();
+    const id = (item.id || '').toLowerCase();
+    const title = (item.title || '').toLowerCase();
+
+    // 1. Walk-in / Demand / Guest Prediction
+    if (
+      actionType === 'walkin' ||
+      actionType === 'predict_guests' ||
+      id.includes('walkin') ||
+      id.includes('headcount') ||
+      title.includes('walk-in') ||
+      title.includes('diner') ||
+      title.includes('attendance')
+    ) {
+      setIsPredictOpen(true);
+    }
+    // 2. Meal Combos / Offers
+    else if (
+      actionType === 'combo' ||
+      actionType === 'create_offers' ||
+      id.includes('offer') ||
+      title.includes('combo')
+    ) {
+      setIsOffersOpen(true);
+    }
+    // 3. Prepared Surplus / Rescue
+    else if (
+      actionType === 'prepared_rescue' ||
+      actionType === 'rescue_food' ||
+      id.includes('surplus') ||
+      title.includes('surplus') ||
+      title.includes('rescue')
+    ) {
+      setIsRescueOpen(true);
+    }
+    // 4. Meal Planning / Rebalance Decision
+    else if (
+      actionType === 'replan' ||
+      actionType === 'plan_meals' ||
+      id.includes('decision') ||
+      title.includes('decision') ||
+      title.includes('stock')
+    ) {
+      setPlanFlowDisruption(item.description || item.detail || item.title || '');
+      setIsPlanFlowOpen(true);
+    }
+    // Fallback default
+    else {
+      setPlanFlowDisruption(item.description || item.detail || '');
       setIsPlanFlowOpen(true);
     }
   };
@@ -228,8 +272,8 @@ export const KitchenCompanion: React.FC<KitchenCompanionProps> = ({
           {(summary?.attention_items || []).slice(0, 3).map((item) => (
             <div
               key={item.id}
-              onClick={() => handleAttentionAction(item.action_type)}
-              className="p-5 bg-white rounded-3xl border border-subtle shadow-xs hover:border-terracotta/50 transition cursor-pointer flex flex-col justify-between group"
+              onClick={() => handleAttentionAction(item)}
+              className="p-5 bg-white rounded-3xl border border-subtle shadow-xs hover:border-terracotta/50 hover:shadow-md transition cursor-pointer flex flex-col justify-between group active:scale-[0.99]"
             >
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -250,12 +294,12 @@ export const KitchenCompanion: React.FC<KitchenCompanionProps> = ({
                   {item.title}
                 </h3>
                 <p className="text-xs text-espresso/70 leading-relaxed">
-                  {item.detail}
+                  {item.description || item.detail || item.suggested_action}
                 </p>
               </div>
 
               <div className="mt-4 pt-3 border-t border-subtle/60 flex items-center justify-between text-xs font-semibold text-terracotta">
-                <span>Take Action</span>
+                <span>{item.suggested_action || 'Take Action'}</span>
                 <span>&rarr;</span>
               </div>
             </div>
